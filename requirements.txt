@@ -9,3 +9,4 @@ gprofiler-official
 requests
 plotly
 networkx
+pyvis
