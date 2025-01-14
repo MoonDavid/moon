@@ -1,1 +1,9 @@
 streamlit
+pandas
+numpy
+seaborn
+matplotlib
+matplotlib-venn
+biopython
+gprofiler-official
+requests
