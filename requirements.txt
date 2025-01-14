@@ -8,3 +8,4 @@ biopython
 gprofiler-official
 requests
 plotly
+networkx
