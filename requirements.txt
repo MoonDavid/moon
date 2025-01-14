@@ -7,3 +7,4 @@ matplotlib-venn
 biopython
 gprofiler-official
 requests
+plotly
