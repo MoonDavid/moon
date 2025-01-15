@@ -22,7 +22,7 @@ import ast
 def load_data(file_path: str) -> pd.DataFrame:
     """Load the dataset from a CSV file."""
     df = pd.read_csv(file_path)
-    df = df.replace(("", np.nan))
+    df = df.replace("", np.nan)
     return df
 
 
