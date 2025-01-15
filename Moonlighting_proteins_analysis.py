@@ -417,8 +417,8 @@ def main():
     # Load data
     df = load_data('moonhumannew.csv')  # Update with your actual file path
     st.write(
-        "Questa app permette un'analisi dati esplorativa delle proteine moonlighting umane. "
-        "La possibilità di essere scaricata in CSV, la ricerca di valori e l'ordinamento sono possibili in ogni tabella. "
+        "Questa app interattiva permette un'analisi dati esplorativa delle proteine moonlighting umane. "
+        "Ogni tabella offre funzionalità di esportazione in formato CSV, ricerca di valori specifici e ordinamento delle colonne "
         "Qui di seguito è mostrato un compendio di proteine moonlighting umane ottenute dai 3 principali database: "
              "[MoonProt](http://www.moonlightingproteins.org/), [MoonDB](http://moondb.hb.univ-amu.fr/) e [MultiTaskProtDB](http://wallace.uab.es/multitaskII). "
              "Il dataset di MultiTaskProtDB è stato ottenuto tramite mail da uno degli autori perchè il server è down da mesi per attacco informatico")
