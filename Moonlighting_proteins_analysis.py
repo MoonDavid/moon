@@ -47,7 +47,7 @@ def plot_venn_diagram(data: pd.DataFrame):
     moonprot_set = set(data[data['MoonProtDB'] == True]['UniProtKB-AC'])
     multitask_set = set(data[data['MultiTaskProtDB'] == True]['UniProtKB-AC'])
 
-    plt.figure(figsize=(8, 8))
+    plt.figure(figsize=(10, 4))
     venn = venn3([moondb_set, moonprot_set, multitask_set],
                  set_labels=('MoonDB', 'MoonProt', 'MultiTaskProtDB'))
     plt.title("Venn diagram showing the distribution of proteins across the 3 main databases")
@@ -59,7 +59,6 @@ def filter_proteins(data: pd.DataFrame) -> pd.DataFrame:
     Filter proteins based on selected databases and operation using a form layout.
     Stores results in session state with a descriptive key indicating the operation.
     """
-    st.subheader("Filtering by membership in different databases")
 
     # Create a form container for better organization and control
     with st.form(key='protein_filter_form'):
@@ -418,7 +417,7 @@ def main():
     # Load data
     df = load_data('moonhumannew.csv')  # Update with your actual file path
     st.write(
-        "Questa app permette un'analisi dati esplorativa delle proteine moonlighting umane"
+        "Questa app permette un'analisi dati esplorativa delle proteine moonlighting umane. "
         "La possibilità di essere scaricata in CSV, la ricerca di valori e l'ordinamento sono possibili in ogni tabella. "
         "Qui di seguito è mostrato un compendio di proteine moonlighting umane ottenute dai 3 principali database: "
              "[MoonProt](http://www.moonlightingproteins.org/), [MoonDB](http://moondb.hb.univ-amu.fr/) e [MultiTaskProtDB](http://wallace.uab.es/multitaskII). "
@@ -429,12 +428,16 @@ def main():
 
     # Venn Diagram
     st.subheader("Venn Diagram of Proteins Distribution Across Databases")
+    st.write("Visualizza la distribuzione delle proteine moonlighting umane nei 3 principali database: MoonDB, MoonProt e MultiTaskProtDB")
     plot_venn_diagram(df)
 
     # Filtering Section
+    st.subheader("Filtering by membership in different databases")
+    st.write("Crea un dataset filtrato selezionando i database di interesse e se vuoi l'intersezione o l'unione dei risultati.")
     filtered_data = filter_proteins(df)
     # Add genes to session state
-    st.subheader("DataFrames in Session State")
+    st.subheader("Saved filtered dataframes")
+    st.write("Seleziona il dataset filtrato da usare per le anlisi successive:")
     dataframes_dict = get_dataframes_from_session()
     if not dataframes_dict:
         st.info("No DataFrames found in session state.")
@@ -443,8 +446,8 @@ def main():
         selected_df_name = st.selectbox("Select a DataFrame for successive analysis:", df_names)
         data = dataframes_dict[selected_df_name]
 
-        st.subheader(f"Displaying: {selected_df_name}")
-        st.dataframe(data)
+        #st.subheader(f"Displaying: {selected_df_name}")
+        #st.dataframe(data)
     if 'run_analysis' not in st.session_state:
         st.session_state.run_analysis = False
     if st.session_state.run_analysis:
