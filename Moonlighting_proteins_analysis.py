@@ -113,14 +113,17 @@ def filter_proteins(data: pd.DataFrame) -> pd.DataFrame:
         db_names = [name.title() for name in selected_sets]
         operation_str = " AND " if operation == "Intersection" else " OR "
         session_key = f"humanMPs({operation_str.join(db_names)})"
+        session_key2=f"humanMPs({operation_str.join(db_names)})_df"
 
         # Store the filtered UniProtKB-AC list in session state
         st.session_state[session_key] = filtered_data['UniProtKB-AC'].tolist()
+        st.session_state[session_key] = filtered_data
 
         # Display results
         st.write(f"Number of filtered proteins: {filtered_data.shape[0]}")
         st.write(f"Results stored in session state with key: {session_key}")
         st.dataframe(filtered_data)
+        st.session_state.run_analysis=True
 
         return filtered_data
 
@@ -130,6 +133,12 @@ def filter_proteins(data: pd.DataFrame) -> pd.DataFrame:
 
     return data
 
+def get_dataframes_from_session():
+    dataframes = {}
+    for key, value in st.session_state.items():
+        if isinstance(value, pd.DataFrame):
+            dataframes[key] = value
+    return dataframes
 
 def feature_analysis(filtered_data: pd.DataFrame):
     """Analyze features related to Gene Ontology."""
@@ -371,58 +380,66 @@ def main():
     st.title("Moonlighting Proteins Analysis")
 
     # Load data
-    data = load_data('moonhumannew.csv')  # Update with your actual file path
+    df = load_data('moonhumannew.csv')  # Update with your actual file path
 
     # Display dataset overview
     st.subheader("Dataset Overview of Human Moonlighting Proteins")
-    st.dataframe(data)
+    st.dataframe(df)
 
     # Venn Diagram
     st.subheader("Venn Diagram of Proteins Distribution Across Databases")
-    plot_venn_diagram(data)
+    plot_venn_diagram(df)
 
     # Filtering Section
-    filtered_data = filter_proteins(data)
+    filtered_data = filter_proteins(df)
     # Add genes to session state
+    st.subheader("DataFrames in Session State")
+    dataframes_dict = get_dataframes_from_session()
+    if not dataframes_dict:
+        st.info("No DataFrames found in session state.")
+    else:
+        df_names = list(dataframes_dict.keys())
+        selected_df_name = st.selectbox("Select a DataFrame for successive analysis:", df_names)
+        data = dataframes_dict[selected_df_name]
 
-    if 'enzymes' not in st.session_state:
-        enzymes = filtered_data[
-            filtered_data[['EC number', 'Catalytic activity']].notna().any(axis=1)
-        ]['UniProtKB-AC'].dropna().unique().tolist()
-        st.session_state.enzymes = enzymes
-    # Feature Analysis
-    feature_analysis(filtered_data)
+        st.subheader(f"Displaying: {selected_df_name}")
+        st.dataframe(data)
+    if 'run_analysis' not in st.session_state:
+        st.session_state.run_analysis = False
+    if st.session_state.run_analysis:
+        # Feature Analysis
+        feature_analysis(data)
 
-    # Sequence Analysis
-    sequence_analysis(filtered_data)
+        # Sequence Analysis
+        sequence_analysis(data)
 
-    # =======================
-    # InterPro Data Analysis Section
-    st.subheader("InterPro Data Analysis")
+        # =======================
+        # InterPro Data Analysis Section
+        st.subheader("InterPro Data Analysis")
 
-    # Function to safely evaluate strings to Python literals
-    def safe_literal_eval(val):
-        try:
-            return ast.literal_eval(val)
-        except (ValueError, SyntaxError):
-            return val
+        # Function to safely evaluate strings to Python literals
+        def safe_literal_eval(val):
+            try:
+                return ast.literal_eval(val)
+            except (ValueError, SyntaxError):
+                return val
 
-    # Convert the 'interpro_data' column from string to actual tuples
-    data['interpro_data'] = data['interpro_data'].apply(safe_literal_eval)
-    # Convert the 'interpro_data' column from string to actual tuples
+        # Convert the 'interpro_data' column from string to actual tuples
+        data['interpro_data'] = data['interpro_data'].apply(safe_literal_eval)
+        # Convert the 'interpro_data' column from string to actual tuples
 
-    # Convert each list in the 'interpro_data' column to a set to remove duplicates within each row
-    data['interpro_data'] = data['interpro_data'].apply(lambda x: list(set(x)) if isinstance(x, list) else x)
+        # Convert each list in the 'interpro_data' column to a set to remove duplicates within each row
+        data['interpro_data'] = data['interpro_data'].apply(lambda x: list(set(x)) if isinstance(x, list) else x)
 
-    # Explode the 'interpro_data' column
-    df_exploded = data.explode('interpro_data')
+        # Explode the 'interpro_data' column
+        df_exploded = data.explode('interpro_data')
 
-    # Count the occurrences of each value in the 'interpro_data' column
-    most_frequent_accessions = df_exploded['interpro_data'].value_counts()
+        # Count the occurrences of each value in the 'interpro_data' column
+        most_frequent_accessions = df_exploded['interpro_data'].value_counts()
 
-    # Display the most frequent values
-    st.write("### Most Frequent InterPro Data Values:")
-    st.dataframe(most_frequent_accessions)
+        # Display the most frequent values
+        st.write("### Most Frequent InterPro Data Values:")
+        st.dataframe(most_frequent_accessions)
 
 
 if __name__ == "__main__":
