@@ -112,12 +112,12 @@ def filter_proteins(data: pd.DataFrame) -> pd.DataFrame:
         # Convert database names to title case and join them
         db_names = [name.title() for name in selected_sets]
         operation_str = " AND " if operation == "Intersection" else " OR "
-        session_key = f"humanMPs({operation_str.join(db_names)})"
-        session_key2=f"humanMPs({operation_str.join(db_names)})_df"
+        session_key = f"humanMPs({operation_str.join(db_names)})_uniprotids"
+        session_key2=f"humanMPs({operation_str.join(db_names)})"
 
         # Store the filtered UniProtKB-AC list in session state
         st.session_state[session_key] = filtered_data['UniProtKB-AC'].tolist()
-        st.session_state[session_key] = filtered_data
+        st.session_state[session_key2] = filtered_data
 
         # Display results
         st.write(f"Number of filtered proteins: {filtered_data.shape[0]}")
