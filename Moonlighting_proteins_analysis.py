@@ -228,13 +228,43 @@ def display_categorical_feature(data: pd.DataFrame, column: str):
     if "Gene Ontology" in column:
         st.write(f"### Count of most common pairs in `{column}`:")
         go_terms = data[column].dropna().str.split('; ')
-        go_pairs = go_terms.apply(lambda x: list(itertools.combinations(sorted(x), 2)))
-        go_pairs = go_pairs.explode().dropna()
+        go_terms = data[column].dropna().str.split('; ')
+        # Split the GO terms into lists
+        data['GO_terms_list'] = data[column].dropna().str.split('; ')
+
+        # Function to generate GO term pairs
+        def generate_go_pairs(go_terms):
+            """
+            Generate all unique pairs of GO terms from a list.
+
+            Parameters:
+            - go_terms (list): List of GO terms for a UniProt entry.
+
+            Returns:
+            - list of tuples: Each tuple contains a pair of GO terms.
+            """
+            # Ensure there are at least two GO terms to form a pair
+            if not isinstance(go_terms, list):
+                return []
+            if len(go_terms) < 2:
+                return []
+
+            # Sort the GO terms to maintain consistency in pairs
+            sorted_terms = sorted(go_terms)
+
+            # Generate all unique combinations of two GO terms
+            return list(itertools.combinations(sorted_terms, 2))
+
+        # Apply the function to generate GO term pairs
+        data['GO_term_pairs'] = data['GO_terms_list'].apply(generate_go_pairs)
+
+        # Create the dictionary mapping UniProt to GO term pairs
+        uniprot_to_go_pairs = pd.Series(data['GO_term_pairs'].values, index=data['UniProtKB-AC']).to_dict()
+        go_pairs = data['GO_term_pairs'].explode().dropna().tolist()
 
         go_pair_counts = Counter(go_pairs)
         go_pair_counts_df = pd.DataFrame(go_pair_counts.items(), columns=["Pair", "Count"]).sort_values(by="Count",
-                                                                                                        ascending=False).head(
-            20)
+                                                                                                        ascending=False).head(20)
 
         # Display the dataframe with multi-row selection
         st.write("Select rows from the table below to save associated UniProtKB-AC IDs for later analysis:")
@@ -250,15 +280,21 @@ def display_categorical_feature(data: pd.DataFrame, column: str):
             selected_rows = event.selection.rows
             selected_pairs = go_pair_counts_df.iloc[selected_rows]["Pair"].tolist()
             st.write(f"Selected pairs: {selected_pairs}")
+            def find_uniprots_by_go_pair(uniprot_to_go_pairs, go_pair):
+                """
+                Retrieve all UniProt identifiers associated with a given GO pair.
 
-            # Save associated UniProtKB-AC values
+                Parameters:
+                - uniprot_to_go_pairs (dict): Dictionary mapping UniProt identifiers to GO term pairs.
+                - go_pair (tuple): The GO pair to search for.
+
+                Returns:
+                - list: List of UniProt identifiers associated with the given GO pair.
+                """
+                return [uniprot for uniprot, pairs in uniprot_to_go_pairs.items() if go_pair in pairs]
             selected_uniprot_ids = []
             for pair in selected_pairs:
-                element1, element2 = pair
-                matched_rows = data[column].dropna().apply(
-                    lambda x: element1 in x and element2 in x
-                )
-                selected_uniprot_ids.extend(data.loc[matched_rows, "UniProtKB-AC"].dropna().unique())
+                selected_uniprot_ids.extend(find_uniprots_by_go_pair(uniprot_to_go_pairs, pair))
 
             selected_uniprot_ids = list(set(selected_uniprot_ids))  # Remove duplicates
             st.write(f"Associated UniProtKB-AC IDs: {selected_uniprot_ids}")
@@ -346,15 +382,15 @@ def sequence_analysis(filtered_data: pd.DataFrame):
         st.write("#### Molecular Weight Statistics:")
         st.write(filtered_data['Molecular_Weight'].describe())
 
-        st.write("#### Isoelectric Point (pI) Statistics:")
-        st.write(filtered_data['Isoelectric_Point'].describe())
-
         plt.figure(figsize=(10, 6))
         sns.histplot(filtered_data['Molecular_Weight'].dropna(), kde=True, bins=30, color='teal')
         plt.xlabel("Molecular Weight (Da)")
         plt.ylabel("Frequency")
         plt.title("Distribution of Protein Molecular Weight")
         st.pyplot(plt)
+
+        st.write("#### Isoelectric Point (pI) Statistics:")
+        st.write(filtered_data['Isoelectric_Point'].describe())
 
         plt.figure(figsize=(10, 6))
         sns.histplot(filtered_data['Isoelectric_Point'].dropna(), kde=True, bins=30, color='orange')
