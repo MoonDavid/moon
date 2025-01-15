@@ -80,22 +80,26 @@ def panther_overrepresentation_analysis():
             "9606",
             key='panther_taxon_id'
         )
+        annotation_datasets = {
+            "Biological Process": "GO:0008150",
+            "Molecular Function": "GO:0003674",
+            "Cellular Component": "GO:0005575",
+            "PANTHER GO Slim Molecular Function": "ANNOT_TYPE_ID_PANTHER_GO_SLIM_MF",
+            "PANTHER GO Slim Biological Process": "ANNOT_TYPE_ID_PANTHER_GO_SLIM_BP",
+            "PANTHER GO Slim Cellular Location": "ANNOT_TYPE_ID_PANTHER_GO_SLIM_CC",
+            "Protein Class": "ANNOT_TYPE_ID_PANTHER_PC",
+            "PANTHER Pathway": "ANNOT_TYPE_ID_PANTHER_PATHWAY",
+            "Reactome Pathway": "ANNOT_TYPE_ID_REACTOME_PATHWAY"
+        }
 
         # Annotation Dataset Selection
         annot_dataset_choice = st.selectbox(
             "Annotation Dataset",
-            [
-                "GO:0008150 (Biological Process)",
-                "GO:0003674 (Molecular Function)",
-                "GO:0005575 (Cellular Component)",
-                "PANTHER Pathway",
-                "Reactome Pathway"
-            ],
+            annotation_datasets.keys(),
             index=0,
             key='panther_annot_dataset'
         )
-        annot_dataset_id = annot_dataset_choice.split()[0]
-
+        annot_dataset_id = annotation_datasets[annot_dataset_choice]
         # Enrichment Test Type
         enrichment_test_type = st.selectbox(
             "Enrichment Test Type",

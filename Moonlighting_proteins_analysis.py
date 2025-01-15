@@ -183,8 +183,8 @@ def display_categorical_feature(data: pd.DataFrame, column: str):
     # Display basic information about the column
     st.write(f"The selected column `{column}` is **categorical** or treated as such.")
     unique_values = data[column].dropna().unique()
-    st.write(f"### Example rows in `{column}`: ")
-    st.write(unique_values[:10] if len(unique_values) > 10 else unique_values)
+    #st.write(f"### Example rows in `{column}`: ")
+    #st.write(unique_values[:10] if len(unique_values) > 10 else unique_values)
 
     # Count and plot top occurrences
     expanded_data = data[column].dropna().str.split('; ').explode()
@@ -381,7 +381,12 @@ def main():
 
     # Load data
     df = load_data('moonhumannew.csv')  # Update with your actual file path
-
+    st.write(
+        "Questa app permette un'analisi dati esplorativa delle proteine moonlighting umane"
+        "La possibilità di essere scaricata in CSV, la ricerca di valori e l'ordinamento sono possibili in ogni tabella. "
+        "Qui di seguito è mostrato un compendio di proteine moonlighting umane ottenute dai 3 principali database: "
+             "[MoonProt](http://www.moonlightingproteins.org/), [MoonDB](http://moondb.hb.univ-amu.fr/) e [MultiTaskProtDB](http://wallace.uab.es/multitaskII). "
+             "Il dataset di MultiTaskProtDB è stato ottenuto tramite mail da uno degli autori perchè il server è down da mesi per attacco informatico")
     # Display dataset overview
     st.subheader("Dataset Overview of Human Moonlighting Proteins")
     st.dataframe(df)
