@@ -1,17 +1,14 @@
-import streamlit as st
-import pandas as pd
-import numpy as np
-import seaborn as sns
-import matplotlib.pyplot as plt
-from matplotlib_venn import venn3
+import ast
 import itertools
 from collections import Counter
+
+import matplotlib.pyplot as plt
+import numpy as np
+import pandas as pd
+import seaborn as sns
+import streamlit as st
 from Bio.SeqUtils.ProtParam import ProteinAnalysis
-from gprofiler import GProfiler
-import string
-import requests
-from urllib.parse import urlencode
-import ast
+from matplotlib_venn import venn3
 
 
 # =======================
@@ -47,18 +44,56 @@ def plot_venn_diagram(data: pd.DataFrame):
     moonprot_set = set(data[data['MoonProtDB'] == True]['UniProtKB-AC'])
     multitask_set = set(data[data['MultiTaskProtDB'] == True]['UniProtKB-AC'])
 
-    plt.figure(figsize=(10, 4))
+    plt.figure(figsize=(3, 3))
     venn = venn3([moondb_set, moonprot_set, multitask_set],
                  set_labels=('MoonDB', 'MoonProt', 'MultiTaskProtDB'))
-    plt.title("Venn diagram showing the distribution of proteins across the 3 main databases")
+    for text in venn.set_labels:
+        text.set_fontsize(8)
+    plt.title("Venn diagram showing the distribution of human MPs across the 3 main databases",fontsize=8)
     st.pyplot(plt)
+
+
+import pandas as pd
+import streamlit as st
 
 
 def filter_proteins(data: pd.DataFrame) -> pd.DataFrame:
     """
     Filter proteins based on selected databases and operation using a form layout.
-    Stores results in session state with a descriptive key indicating the operation.
+    Stores results in session state with descriptive keys indicating the operation.
+    Also initializes three default filters in session state.
     """
+
+    # Initialize default filters if not already present in session state
+    if 'default_filters_initialized' not in st.session_state:
+        # Create the sets dictionary
+        sets_dict = {
+            "MoonDB": set(data[data['MoonDB'] == True]['UniProtKB-AC']),
+            "MoonProt": set(data[data['MoonProtDB'] == True]['UniProtKB-AC']),
+            "MultiTaskProtDB": set(data[data['MultiTaskProtDB'] == True]['UniProtKB-AC'])
+        }
+
+        # 1. Intersection of MoonProt and MultiTaskProtDB (Most Restrictive)
+        intersection_set = sets_dict["MoonProt"].intersection(sets_dict["MultiTaskProtDB"])
+        intersection_key = "humanMPs(MoonProt AND MultiTaskProtDB)_uniprotids"
+        st.session_state[intersection_key] = list(intersection_set)
+        st.session_state["humanMPs(MoonProt AND MultiTaskProtDB)"] = data[data['UniProtKB-AC'].isin(intersection_set)].reset_index(drop=True)
+
+        # 2. Union of MoonProt and MultiTaskProtDB
+        union_two_set = sets_dict["MoonProt"].union(sets_dict["MultiTaskProtDB"])
+        union_two_key = "humanMPs(MoonProt OR MultiTaskProtDB)_uniprotids"
+        st.session_state[union_two_key] = list(union_two_set)
+        st.session_state["humanMPs(MoonProt OR MultiTaskProtDB)"] = data[data['UniProtKB-AC'].isin(union_two_set)].reset_index(drop=True)
+
+        # 3. Union of all three databases (Least Restrictive)
+        union_all_set = sets_dict["MoonDB"].union(sets_dict["MoonProt"]).union(sets_dict["MultiTaskProtDB"])
+        union_all_key = "humanMPs(MoonDB OR MoonProt OR MultiTaskProtDB)_uniprotids"
+        st.session_state[union_all_key] = list(union_all_set)
+        st.session_state["humanMPs(MoonDB OR MoonProt OR MultiTaskProtDB)"] = data[
+            data['UniProtKB-AC'].isin(union_all_set)].reset_index(drop=True)
+
+        # Mark that default filters have been initialized
+        st.session_state['default_filters_initialized'] = True
 
     # Create a form container for better organization and control
     with st.form(key='protein_filter_form'):
@@ -101,18 +136,19 @@ def filter_proteins(data: pd.DataFrame) -> pd.DataFrame:
         # Perform set operation based on selection
         if operation == 'Intersection':
             filtered_set = set.intersection(*selected_sets_data)
-        else:  # OR operation
+            operation_str = " AND "
+        else:  # Union operation
             filtered_set = set.union(*selected_sets_data)
+            operation_str = " OR "
 
         # Filter the data
-        filtered_data = data[data['UniProtKB-AC'].isin(filtered_set)]
+        filtered_data = data[data['UniProtKB-AC'].isin(filtered_set)].reset_index(drop=True)
 
         # Create a descriptive key for session state
         # Convert database names to title case and join them
         db_names = [name.title() for name in selected_sets]
-        operation_str = " AND " if operation == "Intersection" else " OR "
         session_key = f"humanMPs({operation_str.join(db_names)})_uniprotids"
-        session_key2=f"humanMPs({operation_str.join(db_names)})"
+        session_key2 = f"humanMPs({operation_str.join(db_names)})"
 
         # Store the filtered UniProtKB-AC list in session state
         st.session_state[session_key] = filtered_data['UniProtKB-AC'].tolist()
@@ -122,7 +158,7 @@ def filter_proteins(data: pd.DataFrame) -> pd.DataFrame:
         st.write(f"Number of filtered proteins: {filtered_data.shape[0]}")
         st.write(f"Results stored in session state with key: {session_key}")
         st.dataframe(filtered_data)
-        st.session_state.run_analysis=True
+        st.session_state.run_analysis = True
 
         return filtered_data
 
@@ -130,7 +166,8 @@ def filter_proteins(data: pd.DataFrame) -> pd.DataFrame:
         st.warning("Please select at least one database for filtering.")
         return data
 
-    return data
+
+
 
 def get_dataframes_from_session():
     dataframes = {}
@@ -139,9 +176,10 @@ def get_dataframes_from_session():
             dataframes[key] = value
     return dataframes
 
-def feature_analysis(filtered_data: pd.DataFrame):
+
+def feature_analysis(filtered_data: pd.DataFrame, selected_df_name: str):
     """Analyze features related to Gene Ontology."""
-    st.subheader("Feature Analysis")
+    # st.subheader("Feature Analysis")
 
     # Filter columns related to Gene Ontology
     go_columns = [col for col in filtered_data.columns if "Gene Ontology" in col]
@@ -149,12 +187,12 @@ def feature_analysis(filtered_data: pd.DataFrame):
 
     if column:
         if pd.api.types.is_numeric_dtype(filtered_data[column]):
-            display_numeric_feature(filtered_data, column)
+            display_numeric_feature(filtered_data, column, selected_df_name)
         else:
-            display_categorical_feature(filtered_data, column)
+            display_categorical_feature(filtered_data, column, selected_df_name)
 
 
-def display_numeric_feature(data: pd.DataFrame, column: str):
+def display_numeric_feature(data: pd.DataFrame, column: str, selected_df_name: str):
     """Display analysis for numeric features."""
     st.write(f"The selected column `{column}` is **continuous (numeric)**.")
     st.write("### Descriptive statistics:")
@@ -176,14 +214,12 @@ def display_numeric_feature(data: pd.DataFrame, column: str):
     st.pyplot(fig)
 
 
-def display_categorical_feature(data: pd.DataFrame, column: str):
+def display_categorical_feature(data: pd.DataFrame, column: str, selected_df_name: str):
     """Display analysis for categorical features with UniProtKB-AC tracking."""
 
     # Display basic information about the column
     st.write(f"The selected column `{column}` is **categorical** or treated as such.")
     unique_values = data[column].dropna().unique()
-    #st.write(f"### Example rows in `{column}`: ")
-    #st.write(unique_values[:10] if len(unique_values) > 10 else unique_values)
 
     # Count and plot top occurrences
     expanded_data = data[column].dropna().str.split('; ').explode()
@@ -215,7 +251,7 @@ def display_categorical_feature(data: pd.DataFrame, column: str):
             ]["UniProtKB-AC"].dropna().unique().tolist()
 
             st.write(f"Associated UniProtKB-AC IDs: {selected_uniprot_ids}")
-            session_key = f"{column} - selected_values"
+            session_key = f"{selected_df_name}-{column}:{selected_values}"
             st.session_state[session_key] = selected_uniprot_ids
             st.success(f"Saved in session state with key `{session_key}`.")
 
@@ -263,7 +299,8 @@ def display_categorical_feature(data: pd.DataFrame, column: str):
 
         go_pair_counts = Counter(go_pairs)
         go_pair_counts_df = pd.DataFrame(go_pair_counts.items(), columns=["Pair", "Count"]).sort_values(by="Count",
-                                                                                                        ascending=False).head(20)
+                                                                                                        ascending=False).head(
+            20)
 
         # Display the dataframe with multi-row selection
         st.write("Select rows from the table below to save associated UniProtKB-AC IDs for later analysis:")
@@ -279,43 +316,36 @@ def display_categorical_feature(data: pd.DataFrame, column: str):
             selected_rows = event.selection.rows
             selected_pairs = go_pair_counts_df.iloc[selected_rows]["Pair"].tolist()
             st.write(f"Selected pairs: {selected_pairs}")
+
             def find_uniprots_by_go_pair(uniprot_to_go_pairs, go_pair):
-                """
-                Retrieve all UniProt identifiers associated with a given GO pair.
-
-                Parameters:
-                - uniprot_to_go_pairs (dict): Dictionary mapping UniProt identifiers to GO term pairs.
-                - go_pair (tuple): The GO pair to search for.
-
-                Returns:
-                - list: List of UniProt identifiers associated with the given GO pair.
-                """
                 return [uniprot for uniprot, pairs in uniprot_to_go_pairs.items() if go_pair in pairs]
+
             selected_uniprot_ids = []
             for pair in selected_pairs:
                 selected_uniprot_ids.extend(find_uniprots_by_go_pair(uniprot_to_go_pairs, pair))
 
             selected_uniprot_ids = list(set(selected_uniprot_ids))  # Remove duplicates
             st.write(f"Associated UniProtKB-AC IDs: {selected_uniprot_ids}")
-            session_key = f"{column} - {selected_pairs}"
+            session_key = f"{selected_df_name}-{column}:{selected_pairs}"
             st.session_state[session_key] = selected_uniprot_ids
             st.success(f"Saved in session state with key `{session_key}`.")
 
 
+import pandas as pd
+import seaborn as sns
+import matplotlib.pyplot as plt
+import streamlit as st
+from Bio.SeqUtils.ProtParam import ProteinAnalysis
+
+
 def sequence_analysis(filtered_data: pd.DataFrame):
-    """Analyze protein sequences."""
-    st.header("Protein Sequence Analysis")
+    """Analyze protein sequences with extended physicochemical properties."""
 
     if 'Sequence' in filtered_data.columns:
-        st.subheader("Protein Sequence Exploration")
+        # Initialize ProteinAnalysis objects
+        st.write("## Protein Sequence Analysis")
 
-        if not filtered_data['Sequence'].empty:
-            st.write("### Example Protein Sequence:")
-            st.text(filtered_data['Sequence'].iloc[0])
-        else:
-            st.write("No sequence available in the filtered dataset.")
-
-        # Calculate sequence lengths
+        # 1. Sequence Length
         filtered_data['sequence_length'] = filtered_data['Sequence'].apply(lambda x: len(x) if pd.notnull(x) else 0)
 
         st.write("### Protein Sequence Length:")
@@ -328,16 +358,22 @@ def sequence_analysis(filtered_data: pd.DataFrame):
         plt.title("Distribution of Protein Sequence Lengths")
         st.pyplot(plt)
 
-        # Amino Acid Composition
+        # 2. Amino Acid Composition using ProtParam's get_amino_acids_percent()
         st.write("### Amino Acid Composition:")
 
-        def get_aa_composition(seq: str) -> dict:
-            """Calculate amino acid composition percentage."""
-            aa_counts = Counter(seq)
-            total = sum(aa_counts.values())
-            return {aa: (count / total * 100) for aa, count in aa_counts.items()}
+        def get_amino_acids_percent(seq: str) -> dict:
+            """Calculate amino acid composition percentage using ProtParam."""
+            try:
+                prot_param = ProteinAnalysis(seq)
+                aa_percent = prot_param.get_amino_acids_percent()
+                # Convert fractions to percentages
+                aa_percent_scaled = {aa: percent * 100 for aa, percent in aa_percent.items()}
+                return aa_percent_scaled
+            except Exception as e:
+                st.error(f"Error calculating amino acid composition: {e}")
+                return {}
 
-        aa_composition = filtered_data['Sequence'].dropna().apply(get_aa_composition)
+        aa_composition = filtered_data['Sequence'].dropna().apply(get_amino_acids_percent)
         aa_composition_df = pd.DataFrame(list(aa_composition)).fillna(0)
         mean_aa_composition = aa_composition_df.mean().sort_values(ascending=False)
 
@@ -360,45 +396,305 @@ def sequence_analysis(filtered_data: pd.DataFrame):
         plt.title("Heatmap of Amino Acid Composition")
         st.pyplot(plt)
 
-        # Molecular Weight and Isoelectric Point
+        # 3. Physicochemical Properties
         st.write("### Physicochemical Properties of Protein Sequences:")
 
         def calculate_properties(seq: str) -> pd.Series:
-            """Calculate molecular weight and isoelectric point of a protein sequence."""
+            """Calculate various physicochemical properties of a protein sequence."""
             if pd.isnull(seq) or not seq:
-                return pd.Series({"Molecular_Weight": None, "Isoelectric_Point": None})
+                return pd.Series({
+                    "Molecular_Weight": None,
+                    "Isoelectric_Point": None,
+                    "Aromaticity": None,
+                    "Instability_Index": None,
+                    "Flexibility": None,
+                    "Gravy": None,
+                    "Molar_Extinction_Reduced": None,
+                    "Molar_Extinction_Oxidized": None,
+                    "Charge_pH7.0": None
+                })
             try:
                 prot_param = ProteinAnalysis(seq)
                 mw = prot_param.molecular_weight()
                 pI = prot_param.isoelectric_point()
-                return pd.Series({"Molecular_Weight": mw, "Isoelectric_Point": pI})
-            except:
-                return pd.Series({"Molecular_Weight": None, "Isoelectric_Point": None})
+                aromaticity = prot_param.aromaticity()
+                instability = prot_param.instability_index()
+                flexibility = prot_param.flexibility()
+                gravy = prot_param.gravy()
+                epsilon_reduced, epsilon_oxidized = prot_param.molar_extinction_coefficient()
+                charge_pH7 = prot_param.charge_at_pH(7.0)
+
+                return pd.Series({
+                    "Molecular_Weight": mw,
+                    "Isoelectric_Point": pI,
+                    "Aromaticity": aromaticity,
+                    "Instability_Index": instability,
+                    "Flexibility": flexibility,
+                    "Gravy": gravy,
+                    "Molar_Extinction_Reduced": epsilon_reduced,
+                    "Molar_Extinction_Oxidized": epsilon_oxidized,
+                    "Charge_pH7.0": charge_pH7
+                })
+            except Exception as e:
+                #st.error(f"Error processing sequence: {e}")
+                return pd.Series({
+                    "Molecular_Weight": None,
+                    "Isoelectric_Point": None,
+                    "Aromaticity": None,
+                    "Instability_Index": None,
+                    "Flexibility": None,
+                    "Gravy": None,
+                    "Molar_Extinction_Reduced": None,
+                    "Molar_Extinction_Oxidized": None,
+                    "Charge_pH7.0": None
+                })
 
         properties = filtered_data['Sequence'].apply(calculate_properties)
         filtered_data = pd.concat([filtered_data, properties], axis=1)
 
+        # Helper function to safely plot histograms
+        def safe_histplot(data, xlabel, ylabel, title, color):
+            data = data.dropna()
+            if len(data) > 1:
+                sns.histplot(data, kde=True, bins=30, color=color)
+                plt.xlabel(xlabel)
+                plt.ylabel(ylabel)
+                plt.title(title)
+                st.pyplot(plt)
+            elif len(data) == 1:
+                st.write(f"Only one data point available for {title}. Skipping KDE.")
+                sns.histplot(data, kde=False, bins=30, color=color)
+                plt.xlabel(xlabel)
+                plt.ylabel(ylabel)
+                plt.title(title)
+                st.pyplot(plt)
+            else:
+                st.write(f"No data available for {title}.")
+
+        # 3.1 Molecular Weight Statistics
         st.write("#### Molecular Weight Statistics:")
         st.write(filtered_data['Molecular_Weight'].describe())
 
         plt.figure(figsize=(10, 6))
-        sns.histplot(filtered_data['Molecular_Weight'].dropna(), kde=True, bins=30, color='teal')
-        plt.xlabel("Molecular Weight (Da)")
-        plt.ylabel("Frequency")
-        plt.title("Distribution of Protein Molecular Weight")
-        st.pyplot(plt)
+        safe_histplot(
+            filtered_data['Molecular_Weight'],
+            xlabel="Molecular Weight (Da)",
+            ylabel="Frequency",
+            title="Distribution of Protein Molecular Weight",
+            color='teal'
+        )
 
+        # 3.2 Isoelectric Point Statistics
         st.write("#### Isoelectric Point (pI) Statistics:")
         st.write(filtered_data['Isoelectric_Point'].describe())
 
         plt.figure(figsize=(10, 6))
-        sns.histplot(filtered_data['Isoelectric_Point'].dropna(), kde=True, bins=30, color='orange')
-        plt.xlabel("Isoelectric Point (pI)")
-        plt.ylabel("Frequency")
-        plt.title("Distribution of Protein Isoelectric Point")
-        st.pyplot(plt)
-    else:
-        st.warning("The 'Sequence' column is not present in the dataset.")
+        safe_histplot(
+            filtered_data['Isoelectric_Point'],
+            xlabel="Isoelectric Point (pI)",
+            ylabel="Frequency",
+            title="Distribution of Protein Isoelectric Point",
+            color='orange'
+        )
+
+        # 3.3 Aromaticity Statistics
+        st.write("#### Aromaticity Statistics:")
+        st.write(filtered_data['Aromaticity'].describe())
+
+        plt.figure(figsize=(10, 6))
+        safe_histplot(
+            filtered_data['Aromaticity'],
+            xlabel="Aromaticity",
+            ylabel="Frequency",
+            title="Distribution of Protein Aromaticity",
+            color='purple'
+        )
+
+        # 3.4 Instability Index Statistics
+        st.write("#### Instability Index Statistics:")
+        st.write(filtered_data['Instability_Index'].describe())
+
+        plt.figure(figsize=(10, 6))
+        safe_histplot(
+            filtered_data['Instability_Index'],
+            xlabel="Instability Index",
+            ylabel="Frequency",
+            title="Distribution of Protein Instability Index",
+            color='darkred'
+        )
+
+        # Highlight unstable proteins (Instability Index > 40)
+        unstable = filtered_data[filtered_data['Instability_Index'] > 40]
+        st.write(f"**Number of Unstable Proteins (Instability Index > 40):** {unstable.shape[0]}")
+
+
+
+
+        # 3.6 Gravy (Grand Average of Hydropathy) Statistics
+        st.write("#### Gravy (Grand Average of Hydropathy) Statistics:")
+        st.write(filtered_data['Gravy'].describe())
+
+        plt.figure(figsize=(10, 6))
+        safe_histplot(
+            filtered_data['Gravy'],
+            xlabel="Gravy (Hydropathy)",
+            ylabel="Frequency",
+            title="Distribution of Protein Gravy (Hydropathy)",
+            color='gold'
+        )
+
+        # 3.7 Molar Extinction Coefficient Statistics
+        st.write("#### Molar Extinction Coefficient (ε) Statistics:")
+        st.write(filtered_data[['Molar_Extinction_Reduced', 'Molar_Extinction_Oxidized']].describe())
+
+        # Plot Molar Extinction Coefficients
+        epsilon_reduced = filtered_data['Molar_Extinction_Reduced'].dropna()
+        epsilon_oxidized = filtered_data['Molar_Extinction_Oxidized'].dropna()
+
+        plt.figure(figsize=(10, 6))
+        if len(epsilon_reduced) > 0:
+            sns.histplot(epsilon_reduced, kde=True, bins=30, color='navy', label='Reduced Cysteines')
+        else:
+            st.write("No data available for Molar Extinction Coefficient (Reduced Cysteines).")
+
+        if len(epsilon_oxidized) > 0:
+            sns.histplot(epsilon_oxidized, kde=True, bins=30, color='magenta', label='Disulfide Bridges')
+        else:
+            st.write("No data available for Molar Extinction Coefficient (Disulfide Bridges).")
+
+        if len(epsilon_reduced) > 0 or len(epsilon_oxidized) > 0:
+            plt.xlabel("Molar Extinction Coefficient (ε)")
+            plt.ylabel("Frequency")
+            plt.title("Distribution of Molar Extinction Coefficient")
+            plt.legend()
+            st.pyplot(plt)
+        else:
+            st.write("No data available to plot Molar Extinction Coefficient.")
+
+        # 3.8 Charge at pH 7.0 Statistics
+        st.write("#### Charge at pH 7.0 Statistics:")
+        st.write(filtered_data['Charge_pH7.0'].describe())
+
+        plt.figure(figsize=(10, 6))
+        safe_histplot(
+            filtered_data['Charge_pH7.0'],
+            xlabel="Charge at pH 7.0",
+            ylabel="Frequency",
+            title="Distribution of Protein Charge at pH 7.0",
+            color='brown'
+        )
+
+        # 4. Secondary Structure Analysis
+        st.write("### Secondary Structure Analysis:")
+
+        def calculate_secondary_structure(seq: str) -> pd.Series:
+            """Calculate secondary structure fractions of a protein sequence."""
+            if pd.isnull(seq) or not seq:
+                return pd.Series({
+                    "Fraction_Alpha_Helix": None,
+                    "Fraction_Turn": None,
+                    "Fraction_Beta_Sheet": None
+                })
+            try:
+                prot_param = ProteinAnalysis(seq)
+                ss_frac = prot_param.secondary_structure_fraction()
+                # ProtParam returns (helix, turn, sheet)
+                return pd.Series({
+                    "Fraction_Alpha_Helix": ss_frac[0],
+                    "Fraction_Turn": ss_frac[1],
+                    "Fraction_Beta_Sheet": ss_frac[2]
+                })
+            except Exception as e:
+                st.error(f"Error processing secondary structure for sequence: {e}")
+                return pd.Series({
+                    "Fraction_Alpha_Helix": None,
+                    "Fraction_Turn": None,
+                    "Fraction_Beta_Sheet": None
+                })
+
+        secondary_structure = filtered_data['Sequence'].apply(calculate_secondary_structure)
+        filtered_data = pd.concat([filtered_data, secondary_structure], axis=1)
+
+        # 4.1 Secondary Structure Statistics
+        st.write("#### Secondary Structure Fractions:")
+        st.write(filtered_data[['Fraction_Alpha_Helix', 'Fraction_Turn', 'Fraction_Beta_Sheet']].describe())
+
+        # 4.2 Plot Average Secondary Structure Fractions
+        plt.figure(figsize=(10, 6))
+        ss_df = filtered_data[['Fraction_Alpha_Helix', 'Fraction_Turn', 'Fraction_Beta_Sheet']].dropna()
+        if not ss_df.empty:
+            sns.boxplot(data=ss_df, palette="viridis")
+            plt.ylabel("Fraction")
+            plt.xlabel("Secondary Structure Type")
+            plt.title("Distribution of Secondary Structure Fractions")
+            st.pyplot(plt)
+        else:
+            st.write("No data available to plot Secondary Structure Fractions.")
+
+
+def safe_literal_eval(val):
+    try:
+        return ast.literal_eval(val)
+    except (ValueError, SyntaxError):
+        return val
+def interpro_analysis(data: pd.DataFrame, selected_df_name):
+    """Analyze InterPro data."""
+    st.write(
+        "InterPro provides functional analysis of proteins by classifying them into families and predicting domains and important sites. To classify proteins in this way, InterPro uses predictive models, known as signatures, provided by several different databases (referred to as member databases) that make up the InterPro consortium:"
+        " CATH, CDD, HAMAP, MobiDB Lite, Panther, Pfam, PIRSF, PRINTS, Prosite, SFLD, SMART, SUPERFAMILY AND NCBIfam. The [InterPro Consortium](https://interpro-documentation.readthedocs.io/en/latest/databases.html) section gives further information about the individual databases.")
+
+    # Function to safely evaluate strings to Python literals
+
+    abbr= {
+        "TI": "ncbifam",
+        "PT": "panther",
+        "PS": "profile",
+        "NF": "ncbifam",
+        "PR": "prints",
+        "PI": "pirsf",
+        "cd": "cdd",
+        "SS": "ssf",
+        "G3": "cathgene3d",
+        "MF": "hamap",
+        "SM": "smart",
+        "SF": "sfld",
+        "PF": "pfam",
+        "IP": "InterPro"
+    }
+    # Convert the 'interpro_data' column from string to actual tuples
+    data.loc[:, 'interpro_data'] = data['interpro_data'].apply(safe_literal_eval)
+
+    # Explode the 'interpro_data' column
+    df_exploded = data.explode('interpro_data')
+    # Count the occurrences of each value in the 'interpro_data' column
+    count = df_exploded['interpro_data'].value_counts()
+    count=count.reset_index(name='count')
+    count['weblink']=count['interpro_data'].apply(lambda x: f"https://www.ebi.ac.uk/interpro/entry/{abbr[x[0][:2]]}/{x[0]}" if isinstance(x,tuple) else "")
+    #st.write(f"Selected values: {selected_values}")
+    st.write("### Most Frequent InterPro Data Values:")
+    event = st.dataframe(
+        count,
+        column_config={
+            "weblink": st.column_config.LinkColumn(
+                "weblink",
+                help="Link to InterPro entry"
+            )
+        },
+        use_container_width=True,
+        hide_index=True,
+        on_select="rerun",
+        selection_mode="multi-row",
+    )
+    if event.selection and st.button("Save selection"):
+        selected_rows = event.selection.rows  # Get selected row indices
+        selected_values = count.iloc[selected_rows]['interpro_data'].values.tolist()  # Filter dataframe
+        uniprot_ids = df_exploded[df_exploded['interpro_data'].isin(selected_values)]['UniProtKB-AC'].values.tolist()
+        session_key = f"{selected_df_name}-{selected_values}"
+        st.write(f"Selected values: {selected_values}")
+        st.write(f"Associated UniProtKB-AC IDs: {uniprot_ids}")
+        if session_key not in st.session_state:
+            st.session_state[session_key] = uniprot_ids
+            st.success(f"Associated UniProtKB-AC IDs saved to session state with key: {session_key}")
 
 
 # =======================
@@ -420,21 +716,24 @@ def main():
         "Questa app interattiva permette un'analisi dati esplorativa delle proteine moonlighting umane. "
         "Ogni tabella offre funzionalità di esportazione in formato CSV, ricerca di valori specifici e ordinamento delle colonne "
         "Qui di seguito è mostrato un compendio di proteine moonlighting umane ottenute dai 3 principali database: "
-             "[MoonProt](http://www.moonlightingproteins.org/), [MoonDB](http://moondb.hb.univ-amu.fr/) e [MultiTaskProtDB](http://wallace.uab.es/multitaskII). "
-             "Il dataset di MultiTaskProtDB è stato ottenuto tramite mail da uno degli autori perchè il server è down da mesi per attacco informatico")
+        "[MoonProt](http://www.moonlightingproteins.org/), [MoonDB](http://moondb.hb.univ-amu.fr/) e [MultiTaskProtDB](http://wallace.uab.es/multitaskII). "
+        "Il dataset di MultiTaskProtDB è stato ottenuto tramite mail da uno degli autori perchè il server è down da mesi per attacco informatico")
     # Display dataset overview
     st.subheader("Dataset Overview of Human Moonlighting Proteins")
     st.dataframe(df)
 
     # Venn Diagram
     st.subheader("Venn Diagram of Proteins Distribution Across Databases")
-    st.write("Visualizza la distribuzione delle proteine moonlighting umane nei 3 principali database: MoonDB, MoonProt e MultiTaskProtDB")
+    st.write(
+        "Visualizza la distribuzione delle proteine moonlighting umane nei 3 principali database: MoonDB, MoonProt e MultiTaskProtDB")
     plot_venn_diagram(df)
 
     # Filtering Section
     st.subheader("Filtering by membership in different databases")
-    st.write("Crea un dataset filtrato selezionando i database di interesse e se vuoi l'intersezione o l'unione dei risultati.")
+    st.write(
+        "Crea un dataset filtrato selezionando i database di interesse e se vuoi l'intersezione o l'unione dei risultati.")
     filtered_data = filter_proteins(df)
+
     # Add genes to session state
     st.subheader("Saved filtered dataframes")
     st.write("Seleziona il dataset filtrato da usare per le anlisi successive:")
@@ -446,47 +745,31 @@ def main():
         selected_df_name = st.selectbox("Select a DataFrame for successive analysis:", df_names)
         data = dataframes_dict[selected_df_name]
 
-        #st.subheader(f"Displaying: {selected_df_name}")
-        #st.dataframe(data)
+    st.write(f"Selected DataFrame: {selected_df_name}")
+    st.dataframe(data)
+
     if 'run_analysis' not in st.session_state:
         st.session_state.run_analysis = False
-    if st.session_state.run_analysis:
-        # Feature Analysis
-        feature_analysis(data)
 
-        # Sequence Analysis
-        sequence_analysis(data)
+    if True:
+        # Use an expander to contain all analysis sections
+        st.subheader("GO terms")
+        with st.expander("See analysis"):
+            # Feature Analysis
+            feature_analysis(data,selected_df_name)
 
-        # =======================
-        # InterPro Data Analysis Section
-        st.subheader("InterPro Data Analysis")
+        st.subheader("Protein physicochemical features ")
+        if st.button("Run analysis"):
+            with st.expander("See analysis", expanded=True):
+                # Sequence Analysis
+                sequence_analysis(data)
+        st.subheader("Protein domains")
+        with st.expander("See analysis"):
+            # InterPro Domain Analysis
+            interpro_analysis(data, selected_df_name)
 
-        # Function to safely evaluate strings to Python literals
-        def safe_literal_eval(val):
-            try:
-                return ast.literal_eval(val)
-            except (ValueError, SyntaxError):
-                return val
-
-        # Convert the 'interpro_data' column from string to actual tuples
-        data['interpro_data'] = data['interpro_data'].apply(safe_literal_eval)
-        # Convert the 'interpro_data' column from string to actual tuples
-
-        # Convert each list in the 'interpro_data' column to a set to remove duplicates within each row
-        data['interpro_data'] = data['interpro_data'].apply(lambda x: list(set(x)) if isinstance(x, list) else x)
-
-        # Explode the 'interpro_data' column
-        df_exploded = data.explode('interpro_data')
-
-        # Count the occurrences of each value in the 'interpro_data' column
-        most_frequent_accessions = df_exploded['interpro_data'].value_counts()
-
-        # Display the most frequent values
-        st.write("### Most Frequent InterPro Data Values:")
-        st.dataframe(most_frequent_accessions)
+    # Optionally, you can add other sections outside the expander
 
 
 if __name__ == "__main__":
     main()
-
-
