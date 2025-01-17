@@ -761,7 +761,7 @@ def main():
         "1. Intersezione di MoonProt e MultiTaskProtDB (Più restrttivo)"
         "2. Unione di MoonProt e MultiTaskProtDB"
         "3. Unione di tutti e 3 i database (meno restrttivo)")
-    )
+
     filtered_data = filter_proteins(df)
 
     # Add genes to session state
