@@ -755,13 +755,14 @@ def main():
 
     # Filtering Section
     st.subheader("Filtering by membership in different databases")
-    st.markdown(
-        "Crea un dataset filtrato per le analisi successive selezionando i database di interesse e se vuoi l'intersezione o l'unione dei risultati."
-        "Di default ce ne sono gia' 3:"
-        ""
-        "* Intersezione di MoonProt e MultiTaskProtDB (Più restrttivo)"
-        "* Unione di MoonProt e MultiTaskProtDB"
-        "* Unione di tutti e 3 i database (meno restrttivo)")
+    st.write("""
+        Crea un dataset filtrato per le analisi successive selezionando i database di interesse e se vuoi l'intersezione o l'unione dei risultati.
+        Di default ce ne sono gia' 3:
+
+        * Intersezione di MoonProt e MultiTaskProtDB (Più restrittivo)
+        * Unione di MoonProt e MultiTaskProtDB
+        * Unione di tutti e 3 i database (meno restrittivo)
+    """)
 
     filtered_data = filter_proteins(df)
 
