@@ -714,10 +714,10 @@ def main():
     df = load_data('moonhumannew.csv')  # Update with your actual file path
     st.write(
         "Questa app interattiva permette un'analisi dati esplorativa delle proteine moonlighting umane. "
-        "Ogni tabella offre funzionalità di esportazione in formato CSV, ricerca di valori specifici e ordinamento delle colonne "
+        "Ogni tabella offre funzionalità di esportazione in formato CSV, ricerca di valori specifici e ordinamento delle colonne. "
         "Qui di seguito è mostrato un compendio di proteine moonlighting umane ottenute dai 3 principali database: "
         "[MoonProt](http://www.moonlightingproteins.org/), [MoonDB](http://moondb.hb.univ-amu.fr/) e [MultiTaskProtDB](http://wallace.uab.es/multitaskII). "
-        "Il dataset di MultiTaskProtDB è stato ottenuto tramite mail da uno degli autori perchè il server è down da mesi per attacco informatico")
+        "Il dataset di MultiTaskProtDB è stato ottenuto tramite mail da uno degli autori perchè il server è down da mesi per attacco informatico.")
     # Display dataset overview
     st.subheader("Dataset Overview of Human Moonlighting Proteins")
     st.dataframe(df)
@@ -736,7 +736,7 @@ def main():
 
     # Add genes to session state
     st.subheader("Saved filtered dataframes")
-    st.write("Seleziona il dataset filtrato da usare per le anlisi successive:")
+    st.write("Seleziona il dataset filtrato da usare per le analisi successive:")
     dataframes_dict = get_dataframes_from_session()
     if not dataframes_dict:
         st.info("No DataFrames found in session state.")
@@ -747,6 +747,17 @@ def main():
 
     st.write(f"Selected DataFrame: {selected_df_name}")
     st.dataframe(data)
+    #write how many in data['reviewed'] are reviewed
+    #write total number of proteins
+    st.write(f"Total number of proteins: {data.shape[0]} ("
+    f"Number of reviewed proteins: {data['Reviewed'].str.contains('reviewed').sum()}, "
+    f"Number of non-reviewed proteins: {data['Reviewed'].str.contains('unreviewed').sum()})")
+    #make a check to remove unreviewed proteins
+    if st.checkbox("Remove unreviewed proteins"):
+        data = data[data['Reviewed'].str.contains('reviewed')]
+        st.write(f"Total number of proteins: {data.shape[0]}")
+
+
 
     if 'run_analysis' not in st.session_state:
         st.session_state.run_analysis = False
