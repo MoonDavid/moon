@@ -9,6 +9,8 @@ import seaborn as sns
 import streamlit as st
 from Bio.SeqUtils.ProtParam import ProteinAnalysis
 from matplotlib_venn import venn3
+from pygments.lexer import default
+from Bio.SeqUtils.ProtParam import ProteinAnalysis
 
 
 # =======================
@@ -22,7 +24,12 @@ def load_data(file_path: str) -> pd.DataFrame:
     df = df.replace("", np.nan)
     return df
 
-
+def df_from_uniprots(df,uniprots):
+    """Create a DataFrame from a list of UniProt IDs."""
+    return df[df['UniProtKB-AC'].isin(uniprots)].reset_index(drop=True)
+def df_to_uniprots(df):
+    """Convert a DataFrame to a list of UniProt IDs."""
+    return df['UniProtKB-AC'].tolist()
 def select_organisms(data: pd.DataFrame) -> list:
     """Allow user to select organisms of interest."""
     organisms = data['Organism'].unique()
@@ -75,22 +82,21 @@ def filter_proteins(data: pd.DataFrame) -> pd.DataFrame:
 
         # 1. Intersection of MoonProt and MultiTaskProtDB (Most Restrictive)
         intersection_set = sets_dict["MoonProt"].intersection(sets_dict["MultiTaskProtDB"])
-        intersection_key = "humanMPs(MoonProt AND MultiTaskProtDB)_uniprotids"
+        intersection_key = "humanMPs(MoonProt AND MultiTaskProtDB)"
         st.session_state[intersection_key] = list(intersection_set)
-        st.session_state["humanMPs(MoonProt AND MultiTaskProtDB)"] = data[data['UniProtKB-AC'].isin(intersection_set)].reset_index(drop=True)
+        #st.session_state["humanMPs(MoonProt AND MultiTaskProtDB)"] = data[data['UniProtKB-AC'].isin(intersection_set)].reset_index(drop=True)
 
         # 2. Union of MoonProt and MultiTaskProtDB
         union_two_set = sets_dict["MoonProt"].union(sets_dict["MultiTaskProtDB"])
-        union_two_key = "humanMPs(MoonProt OR MultiTaskProtDB)_uniprotids"
+        union_two_key = "humanMPs(MoonProt OR MultiTaskProtDB)"
         st.session_state[union_two_key] = list(union_two_set)
-        st.session_state["humanMPs(MoonProt OR MultiTaskProtDB)"] = data[data['UniProtKB-AC'].isin(union_two_set)].reset_index(drop=True)
+        #st.session_state["humanMPs(MoonProt OR MultiTaskProtDB)"] = data[data['UniProtKB-AC'].isin(union_two_set)].reset_index(drop=True)
 
         # 3. Union of all three databases (Least Restrictive)
         union_all_set = sets_dict["MoonDB"].union(sets_dict["MoonProt"]).union(sets_dict["MultiTaskProtDB"])
-        union_all_key = "humanMPs(MoonDB OR MoonProt OR MultiTaskProtDB)_uniprotids"
+        union_all_key = "humanMPs_all"
         st.session_state[union_all_key] = list(union_all_set)
-        st.session_state["humanMPs(MoonDB OR MoonProt OR MultiTaskProtDB)"] = data[
-            data['UniProtKB-AC'].isin(union_all_set)].reset_index(drop=True)
+        #st.session_state["humanMPs(MoonDB OR MoonProt OR MultiTaskProtDB)"] = data[data['UniProtKB-AC'].isin(union_all_set)].reset_index(drop=True)
 
         # Mark that default filters have been initialized
         st.session_state['default_filters_initialized'] = True
@@ -106,7 +112,6 @@ def filter_proteins(data: pd.DataFrame) -> pd.DataFrame:
                 "Select one or more sets:",
                 options=["MoonDB", "MoonProt", "MultiTaskProtDB"],
                 default=["MoonDB", "MoonProt", "MultiTaskProtDB"],
-                key='filter_sets'
             )
 
         with col2:
@@ -147,18 +152,18 @@ def filter_proteins(data: pd.DataFrame) -> pd.DataFrame:
         # Create a descriptive key for session state
         # Convert database names to title case and join them
         db_names = [name.title() for name in selected_sets]
-        session_key = f"humanMPs({operation_str.join(db_names)})_uniprotids"
-        session_key2 = f"humanMPs({operation_str.join(db_names)})"
+        session_key = f"humanMPs({operation_str.join(db_names)})"
+        #session_key2 = f"humanMPs({operation_str.join(db_names)})"
 
         # Store the filtered UniProtKB-AC list in session state
         st.session_state[session_key] = filtered_data['UniProtKB-AC'].tolist()
-        st.session_state[session_key2] = filtered_data
+        #st.session_state[session_key2] = filtered_data
 
         # Display results
         st.write(f"Number of filtered proteins: {filtered_data.shape[0]}")
         st.write(f"Results stored in session state with key: {session_key}")
         st.dataframe(filtered_data)
-        st.session_state.run_analysis = True
+
 
         return filtered_data
 
@@ -331,11 +336,7 @@ def display_categorical_feature(data: pd.DataFrame, column: str, selected_df_nam
             st.success(f"Saved in session state with key `{session_key}`.")
 
 
-import pandas as pd
-import seaborn as sns
-import matplotlib.pyplot as plt
-import streamlit as st
-from Bio.SeqUtils.ProtParam import ProteinAnalysis
+
 
 
 def sequence_analysis(filtered_data: pd.DataFrame):
@@ -671,7 +672,7 @@ def interpro_analysis(data: pd.DataFrame, selected_df_name):
     count=count.reset_index(name='count')
     count['weblink']=count['interpro_data'].apply(lambda x: f"https://www.ebi.ac.uk/interpro/entry/{abbr[x[0][:2]]}/{x[0]}" if isinstance(x,tuple) else "")
     #st.write(f"Selected values: {selected_values}")
-    st.write("### Most Frequent InterPro Data Values:")
+    st.write("Most common InterPro domains:")
     event = st.dataframe(
         count,
         column_config={
@@ -695,8 +696,30 @@ def interpro_analysis(data: pd.DataFrame, selected_df_name):
         if session_key not in st.session_state:
             st.session_state[session_key] = uniprot_ids
             st.success(f"Associated UniProtKB-AC IDs saved to session state with key: {session_key}")
-
-
+def rna_binding_analysis(data: pd.DataFrame,selected_df_name):
+    st.write("[RBPWorld](http://research.gzsys.org.cn/eurbpdb2/index.html) is an updated version of EuRBPDB, specifically designed to"
+             " unveil the functions and disease associations of RNA-binding proteins (RBPs)"
+             " with heightened efficacy. Within RBPWorld, an expansive collection of 1,393,686 RBPs"
+             " across 445 species, including 3,303 human RBPs (hRBPs). ")
+    st.write(f"There are {data['RBP type'].notna().sum()} RBPs annotated in RBPWorld in this dataset.")
+    datarbp=data[['UniProtKB-AC','Ensembl ID','Gene symbol', 'RBP type','No. RBPome']]
+    #show datarbp but only rows that hahave Ensembl ID not null
+    datarbp=datarbp[datarbp['Ensembl ID'].notna()]
+    datarbp=datarbp.reset_index(drop=True)
+    st.dataframe(datarbp)
+    if st.button("Save to session state"):
+        sessionkey=f"RBPs_{selected_df_name}"
+        if sessionkey not in st.session_state:
+            st.session_state[sessionkey]=df_to_uniprots(datarbp)
+            st.success(f"RBPs saved to session state with key: {sessionkey}")
+    st.write ("RBP Type Distribution:")
+    st.write(data['RBP type'].value_counts())
+def get_lists_from_session():
+    lists = []
+    for key,value in st.session_state.items():
+        if isinstance(value, list):
+            lists.append(key)
+    return lists
 # =======================
 # Main Function
 # =======================
@@ -711,7 +734,9 @@ def main():
     st.title("Moonlighting Proteins Analysis")
 
     # Load data
-    df = load_data('moonhumannew.csv')  # Update with your actual file path
+    df = load_data('moonhuman.csv')  # Update with your actual file path
+    if 'df' not in st.session_state:
+        st.session_state['df'] = df
     st.write(
         "Questa app interattiva permette un'analisi dati esplorativa delle proteine moonlighting umane. "
         "Ogni tabella offre funzionalità di esportazione in formato CSV, ricerca di valori specifici e ordinamento delle colonne. "
@@ -719,7 +744,7 @@ def main():
         "[MoonProt](http://www.moonlightingproteins.org/), [MoonDB](http://moondb.hb.univ-amu.fr/) e [MultiTaskProtDB](http://wallace.uab.es/multitaskII). "
         "Il dataset di MultiTaskProtDB è stato ottenuto tramite mail da uno degli autori perchè il server è down da mesi per attacco informatico.")
     # Display dataset overview
-    st.subheader("Dataset Overview of Human Moonlighting Proteins")
+    st.subheader("Dataset Overview of Human Moonlighting Proteins (MPs)")
     st.dataframe(df)
 
     # Venn Diagram
@@ -731,44 +756,41 @@ def main():
     # Filtering Section
     st.subheader("Filtering by membership in different databases")
     st.write(
-        "Crea un dataset filtrato selezionando i database di interesse e se vuoi l'intersezione o l'unione dei risultati.")
+        "Crea un dataset filtrato per le analisi successive selezionando i database di interesse e se vuoi l'intersezione o l'unione dei risultati."
+        "Di default ce ne sono gia' 3:"
+        "1. Intersezione di MoonProt e MultiTaskProtDB (Più restrttivo)"
+        "2. Unione di MoonProt e MultiTaskProtDB"
+        "3. Unione di tutti e 3 i database (meno restrttivo)")
+    )
     filtered_data = filter_proteins(df)
 
     # Add genes to session state
-    st.subheader("Saved filtered dataframes")
+    st.subheader("Select dataframe")
     st.write("Seleziona il dataset filtrato da usare per le analisi successive:")
-    dataframes_dict = get_dataframes_from_session()
-    if not dataframes_dict:
-        st.info("No DataFrames found in session state.")
-    else:
-        df_names = list(dataframes_dict.keys())
-        selected_df_name = st.selectbox("Select a DataFrame for successive analysis:", df_names)
-        data = dataframes_dict[selected_df_name]
 
-    st.write(f"Selected DataFrame: {selected_df_name}")
-    st.dataframe(data)
-    #write how many in data['reviewed'] are reviewed
-    #write total number of proteins
-    st.write(f"Total number of proteins: {data.shape[0]} ("
-    f"Number of reviewed proteins: {data['Reviewed'].str.contains('reviewed').sum()}, "
-    f"Number of non-reviewed proteins: {data['Reviewed'].str.contains('unreviewed').sum()})")
-    #make a check to remove unreviewed proteins
-    if st.checkbox("Remove unreviewed proteins"):
-        data=data.drop(data[data['Reviewed'].str.contains('unreviewed')].index)
-        st.write(f"Total number of proteins: {data.shape[0]}")
+    df_names=sorted(get_lists_from_session())
+    if 'index' not in st.session_state:
+        st.session_state['index'] = None
+    if selected_df_name:=st.selectbox("Select a DataFrame for successive analysis:", df_names, index=st.session_state['index']):
+        st.session_state['index'] = df_names.index(selected_df_name)
+        data = df_from_uniprots(df,st.session_state[selected_df_name])
 
+        st.write(f"Selected DataFrame: {selected_df_name}")
+        st.dataframe(data)
+
+        st.write(f"Total number of proteins: {data.shape[0]} ("
+        f"Number of reviewed proteins: {data[data['Reviewed']=='reviewed'].shape[0]}, "
+        f"Number of non-reviewed proteins: {data['Reviewed'].str.contains('unreviewed').sum()})")
+        #make a check to remove unreviewed proteins
+        if st.button("Remove unreviewed proteins"):
+            data = data.drop(data[data['Reviewed'].str.contains('unreviewed')].index)
+            st.success(f"Unreviewed proteins removed. Total number of proteins: {data.shape[0]}.")
 
 
-    if 'run_analysis' not in st.session_state:
-        st.session_state.run_analysis = False
-
-    if True:
-        # Use an expander to contain all analysis sections
         st.subheader("GO terms")
         with st.expander("See analysis"):
             # Feature Analysis
             feature_analysis(data,selected_df_name)
-
         st.subheader("Protein physicochemical features ")
         if st.button("Run analysis"):
             with st.expander("See analysis", expanded=True):
@@ -778,6 +800,10 @@ def main():
         with st.expander("See analysis"):
             # InterPro Domain Analysis
             interpro_analysis(data, selected_df_name)
+        st.subheader("RNA binding proteins")
+        with st.expander("See analysis"):
+            # RNA Binding Analysis
+            rna_binding_analysis(data,selected_df_name)
 
     # Optionally, you can add other sections outside the expander
 

@@ -99,6 +99,7 @@ def run_gprofiler_profile():
                 st.session_state['last_top_n'] = top_n
             except Exception as e:
                 st.error(f"Error during enrichment analysis: {e}")
+                st.write(genes)
                 st.session_state['enrichment_results'] = None
 
         results = st.session_state.get('enrichment_results')
