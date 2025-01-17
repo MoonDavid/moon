@@ -754,7 +754,7 @@ def main():
     f"Number of non-reviewed proteins: {data['Reviewed'].str.contains('unreviewed').sum()})")
     #make a check to remove unreviewed proteins
     if st.checkbox("Remove unreviewed proteins"):
-        data = data[data['Reviewed'].str.contains('reviewed')]
+        data=data.drop(data[data['Reviewed'].str.contains('unreviewed')].index)
         st.write(f"Total number of proteins: {data.shape[0]}")
 
 
