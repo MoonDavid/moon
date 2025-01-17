@@ -1,7 +1,7 @@
 import ast
 import itertools
 from collections import Counter
-
+import altair as alt
 import matplotlib.pyplot as plt
 import numpy as np
 import pandas as pd
@@ -24,6 +24,13 @@ def load_data(file_path: str) -> pd.DataFrame:
     df = df.replace("", np.nan)
     return df
 
+def get_lists_from_session():
+    """Retrieve keys from session_state that contain list objects."""
+    lists = []
+    for key, value in st.session_state.items():
+        if isinstance(value, list):
+            lists.append(key)
+    return lists
 def df_from_uniprots(df,uniprots):
     """Create a DataFrame from a list of UniProt IDs."""
     return df[df['UniProtKB-AC'].isin(uniprots)].reset_index(drop=True)
@@ -696,30 +703,63 @@ def interpro_analysis(data: pd.DataFrame, selected_df_name):
         if session_key not in st.session_state:
             st.session_state[session_key] = uniprot_ids
             st.success(f"Associated UniProtKB-AC IDs saved to session state with key: {session_key}")
-def rna_binding_analysis(data: pd.DataFrame,selected_df_name):
-    st.write("[RBPWorld](http://research.gzsys.org.cn/eurbpdb2/index.html) is an updated version of EuRBPDB, specifically designed to"
-             " unveil the functions and disease associations of RNA-binding proteins (RBPs)"
-             " with heightened efficacy. Within RBPWorld, an expansive collection of 1,393,686 RBPs"
-             " across 445 species, including 3,303 human RBPs (hRBPs). ")
+
+
+def rna_binding_analysis(data: pd.DataFrame, selected_df_name):
+    st.write(
+        "[RBPWorld](http://research.gzsys.org.cn/eurbpdb2/index.html) is an updated version of EuRBPDB, specifically designed to"
+        " unveil the functions and disease associations of RNA-binding proteins (RBPs)"
+        " with heightened efficacy. Within RBPWorld, an expansive collection of 1,393,686 RBPs"
+        " across 445 species, including 3,303 human RBPs (hRBPs). ")
     st.write(f"There are {data['RBP type'].notna().sum()} RBPs annotated in RBPWorld in this dataset.")
-    datarbp=data[['UniProtKB-AC','Ensembl ID','Gene symbol', 'RBP type','No. RBPome']]
-    #show datarbp but only rows that hahave Ensembl ID not null
-    datarbp=datarbp[datarbp['Ensembl ID'].notna()]
-    datarbp=datarbp.reset_index(drop=True)
+
+    # Filter and display relevant RBP data
+    datarbp = data[['UniProtKB-AC', 'Ensembl ID', 'Gene symbol', 'RBP type', 'No. RBPome']]
+    datarbp = datarbp[datarbp['Ensembl ID'].notna()]
+    datarbp = datarbp.reset_index(drop=True)
     st.dataframe(datarbp)
+
+    # Button to save RBPs to session state
     if st.button("Save to session state"):
-        sessionkey=f"RBPs_{selected_df_name}"
+        sessionkey = f"RBPs_{selected_df_name}"
         if sessionkey not in st.session_state:
-            st.session_state[sessionkey]=df_to_uniprots(datarbp)
+            st.session_state[sessionkey] = df_to_uniprots(datarbp)
             st.success(f"RBPs saved to session state with key: {sessionkey}")
-    st.write ("RBP Type Distribution:")
-    st.write(data['RBP type'].value_counts())
-def get_lists_from_session():
-    lists = []
-    for key,value in st.session_state.items():
-        if isinstance(value, list):
-            lists.append(key)
-    return lists
+
+    # RBP Type Distribution
+    st.write("### RBP Type Distribution:")
+    rbp_type_counts = data['RBP type'].value_counts().reset_index()
+    rbp_type_counts.columns = ['RBP Type', 'Count']
+    st.dataframe(rbp_type_counts)
+
+    # Plot RBP Type Distribution
+    st.write("#### RBP Type Distribution Plot")
+    plt.figure(figsize=(10, 6))
+    sns.barplot(data=rbp_type_counts, x='RBP Type', y='Count', palette='viridis')
+    plt.xticks(rotation=45, ha='right')
+    plt.xlabel('RBP Type')
+    plt.ylabel('Number of RBPs')
+    plt.title('Distribution of RBP Types in RBPWorld')
+    plt.tight_layout()
+    st.pyplot(plt)
+    plt.clf()  # Clear the figure after plotting
+
+    # Distribution of "No. RBPome"
+    st.write("### Distribution of 'No. RBPome':")
+    st.dataframe(data['No. RBPome'].describe())
+
+    # Plot Distribution of "No. RBPome"
+    st.write("#### 'No. RBPome' Distribution Plot")
+    plt.figure(figsize=(10, 6))
+    sns.histplot(data['No. RBPome'].dropna(), bins=30, kde=True, color='skyblue')
+    plt.xlabel('Number of RBPome')
+    plt.ylabel('Frequency')
+    plt.title('Distribution of "No. RBPome"')
+    plt.tight_layout()
+    st.pyplot(plt)
+    plt.clf()  # Clear the figure after plotting
+
+
 # =======================
 # Main Function
 # =======================
