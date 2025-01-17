@@ -759,9 +759,9 @@ def main():
         "Crea un dataset filtrato per le analisi successive selezionando i database di interesse e se vuoi l'intersezione o l'unione dei risultati."
         "Di default ce ne sono gia' 3:"
         ""
-        "- Intersezione di MoonProt e MultiTaskProtDB (Più restrttivo)"
-        "- Unione di MoonProt e MultiTaskProtDB"
-        "- Unione di tutti e 3 i database (meno restrttivo)")
+        "* Intersezione di MoonProt e MultiTaskProtDB (Più restrttivo)"
+        "* Unione di MoonProt e MultiTaskProtDB"
+        "* Unione di tutti e 3 i database (meno restrttivo)")
 
     filtered_data = filter_proteins(df)
 
