@@ -11,7 +11,10 @@ from Bio.SeqUtils.ProtParam import ProteinAnalysis
 from matplotlib_venn import venn3
 from pygments.lexer import default
 from Bio.SeqUtils.ProtParam import ProteinAnalysis
-
+from scipy.stats import hypergeom
+from statsmodels.stats.multitest import multipletests
+import altair as alt
+import json
 
 # =======================
 # Helper Functions
@@ -24,6 +27,79 @@ def load_data(file_path: str) -> pd.DataFrame:
     df = df.replace("", np.nan)
     return df
 
+
+def domain_enrichment_analysis(query_uniprots, domain_dict, correction='fdr_bh'):
+    """
+    Perform over-representation analysis on a set of UniProt IDs ('query_uniprots')
+    against a background defined by 'domain_dict' (domain -> list of UniProt IDs).
+    Returns a DataFrame with enrichment results for each domain, sorted by corrected p-value.
+
+    Parameters
+    ----------
+    query_uniprots : iterable of str
+        List or set of UniProt IDs for which we want to test enrichment.
+    domain_dict : dict
+        Dictionary mapping domain (str) -> list of UniProt IDs (str) having that domain.
+    correction : str
+        Type of p-value correction (e.g., 'fdr_bh', 'bonferroni', 'holm', 'sidak', etc.).
+        Passed to statsmodels.stats.multitest.multipletests.
+
+    Returns
+    -------
+    pd.DataFrame
+        Columns: ['domain', 'k', 'K', 'n', 'N', 'pval', 'pval_corrected'] sorted by 'pval_corrected'.
+    """
+    query_set = set(query_uniprots)
+
+    # Build the set of all background UniProt IDs
+    all_uniprots = set()
+    for d, uniprot_list in domain_dict.items():
+        all_uniprots.update(uniprot_list)
+
+    N = len(all_uniprots)  # total background
+    n = len(query_set)  # size of the query
+
+    domains = []
+    pvals = []
+    k_vals = []
+    K_vals = []
+
+    for domain, uniprot_list in domain_dict.items():
+        K = len(uniprot_list)  # number of background proteins with this domain
+        k = len(query_set.intersection(uniprot_list))  # overlap with query
+
+        # If there's no overlap, p-value is 1 (not enriched),
+        # but we still record it for completeness.
+        if K == 0 or k == 0:
+            pval = 1.0
+        else:
+            # hypergeom.sf(k-1, N, K, n) => P(X >= k)
+            pval = hypergeom.sf(k - 1, N, K, n)
+
+        domains.append(domain)
+        pvals.append(pval)
+        k_vals.append(k)
+        K_vals.append(K)
+
+    # Multiple test correction
+    reject, pvals_corrected, _, _ = multipletests(pvals, alpha=0.05, method=correction)
+
+    # Create a DataFrame
+    results_df = pd.DataFrame({
+        'domain': domains,
+        'k': k_vals,
+        'K': K_vals,
+        'n': n,
+        'N': N,
+        'pval': pvals,
+        'pval_corrected': pvals_corrected
+    })
+
+    # Sort by corrected p-value ascending
+    results_df.sort_values('pval_corrected', inplace=True)
+    results_df.reset_index(drop=True, inplace=True)
+
+    return results_df
 def get_lists_from_session():
     """Retrieve keys from session_state that contain list objects."""
     lists = []
@@ -703,6 +779,24 @@ def interpro_analysis(data: pd.DataFrame, selected_df_name):
         if session_key not in st.session_state:
             st.session_state[session_key] = uniprot_ids
             st.success(f"Associated UniProtKB-AC IDs saved to session state with key: {session_key}")
+    st.write("### Enrichment of InterPro domains:")
+    #read dict from domain_dict.json
+    domain_dict = json.load(open("domain_dict.json", "r"))
+    #delete all keys that starts with DP
+    domain_dict = {k: v for k, v in domain_dict.items() if not k.startswith("DP")}
+    results_df=domain_enrichment_analysis(domain_dict=domain_dict, query_uniprots=df_to_uniprots(data), correction='fdr_bh')
+    st.subheader("Enrichment Results")
+
+    # Add a column for negative log10 p-value (for plotting)
+    #results_df["-log10(pval_corrected)"] = -results_df["pval_corrected"].apply(lambda x: 1e-300 if x <= 0 else x).apply(np.log10)
+    results_df['weblink'] = results_df['domain'].apply(
+        lambda x: f"https://www.ebi.ac.uk/interpro/entry/{abbr[x[:2]]}/{x}" if x[1].isalpha() else f"https://www.ebi.ac.uk/interpro/entry/cathgene3d/G3DSA:{x}")
+    st.dataframe(results_df,column_config={
+            "weblink": st.column_config.LinkColumn(
+                "weblink",
+                help="Link to InterPro entry"
+            )},hide_index=True
+        )
 
 
 def rna_binding_analysis(data: pd.DataFrame, selected_df_name):
@@ -811,15 +905,24 @@ def main():
     st.write("Seleziona il dataset filtrato da usare per le analisi successive:")
 
     df_names=sorted(get_lists_from_session())
+
+    def on_change():
+        st.session_state['index'] = df_names.index(st.session_state.selected_df)
+
     if 'index' not in st.session_state:
         st.session_state['index'] = None
-    if selected_df_name:=st.selectbox("Select a DataFrame for successive analysis:", df_names, index=st.session_state['index']):
-        st.session_state['index'] = df_names.index(selected_df_name)
-        data = df_from_uniprots(df,st.session_state[selected_df_name])
 
-        st.write(f"Selected DataFrame: {selected_df_name}")
+    selected_df_name = st.selectbox(
+        "Select a DataFrame for successive analysis:",
+        df_names,
+        key='selected_df',
+        index=st.session_state['index'],
+        on_change=on_change
+    )
+
+    if selected_df_name:
+        data = df_from_uniprots(df, st.session_state[selected_df_name])
         st.dataframe(data)
-
         st.write(f"Total number of proteins: {data.shape[0]} ("
         f"Number of reviewed proteins: {data[data['Reviewed']=='reviewed'].shape[0]}, "
         f"Number of non-reviewed proteins: {data['Reviewed'].str.contains('unreviewed').sum()})")
