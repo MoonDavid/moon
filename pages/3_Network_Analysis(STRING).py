@@ -293,7 +293,7 @@ def main():
                             "gravitationalConstant": -5000,
                             "springLength": 95
                         },
-                        "minVelocity": 0.75
+                        "minVelocity": 0.05
                     }
                 }
             """)
