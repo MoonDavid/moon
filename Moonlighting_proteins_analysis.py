@@ -885,8 +885,6 @@ def disorder_analysis(data: pd.DataFrame, selected_df_name: str):
         lambda x: x / 100 if pd.notnull(x) else x
     )
 
-    st.header(f"Disorder Analysis for {selected_df_name}")
-
     # Display the DataFrame
     st.subheader("Data Preview")
     st.dataframe(dataidp)
@@ -1092,6 +1090,7 @@ def main():
         with st.expander("See analysis"):
             # RNA Binding Analysis
             rna_binding_analysis(data,selected_df_name)
+        st.subheader("Intrinsically disordered regions and proteins")
         with st.expander("See analysis"):
             disorder_analysis(data,selected_df_name)
 
