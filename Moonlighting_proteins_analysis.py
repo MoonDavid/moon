@@ -31,7 +31,7 @@ def load_data(file_path: str) -> pd.DataFrame:
     return df
 
 
-def domain_enrichment_analysis(query_uniprots, domain_dict, correction='fdr_bh'):
+def enrichment_analysis(query_uniprots, dict, correction='fdr_bh'):
     """
     Perform over-representation analysis on a set of UniProt IDs ('query_uniprots')
     against a background defined by 'domain_dict' (domain -> list of UniProt IDs).
@@ -56,18 +56,18 @@ def domain_enrichment_analysis(query_uniprots, domain_dict, correction='fdr_bh')
 
     # Build the set of all background UniProt IDs
     all_uniprots = set()
-    for d, uniprot_list in domain_dict.items():
+    for d, uniprot_list in dict.items():
         all_uniprots.update(uniprot_list)
 
     N = len(all_uniprots)  # total background
     n = len(query_set)  # size of the query
 
-    domains = []
+    terms = []
     pvals = []
     k_vals = []
     K_vals = []
 
-    for domain, uniprot_list in domain_dict.items():
+    for term, uniprot_list in dict.items():
         K = len(uniprot_list)  # number of background proteins with this domain
         k = len(query_set.intersection(uniprot_list))  # overlap with query
 
@@ -79,7 +79,7 @@ def domain_enrichment_analysis(query_uniprots, domain_dict, correction='fdr_bh')
             # hypergeom.sf(k-1, N, K, n) => P(X >= k)
             pval = hypergeom.sf(k - 1, N, K, n)
 
-        domains.append(domain)
+        terms.append(term)
         pvals.append(pval)
         k_vals.append(k)
         K_vals.append(K)
@@ -89,7 +89,7 @@ def domain_enrichment_analysis(query_uniprots, domain_dict, correction='fdr_bh')
 
     # Create a DataFrame
     results_df = pd.DataFrame({
-        'domain': domains,
+        'term': terms,
         'k': k_vals,
         'K': K_vals,
         'n': n,
@@ -787,12 +787,12 @@ def interpro_analysis(data: pd.DataFrame, selected_df_name):
     domain_dict = json.load(open("domain_dict.json", "r"))
     #delete all keys that starts with DP
     domain_dict = {k: v for k, v in domain_dict.items() if not k.startswith("DP")}
-    results_df=domain_enrichment_analysis(domain_dict=domain_dict, query_uniprots=df_to_uniprots(data), correction='fdr_bh')
+    results_df=enrichment_analysis(dict=domain_dict, query_uniprots=df_to_uniprots(data), correction='fdr_bh')
     st.subheader("Enrichment Results")
 
     # Add a column for negative log10 p-value (for plotting)
     #results_df["-log10(pval_corrected)"] = -results_df["pval_corrected"].apply(lambda x: 1e-300 if x <= 0 else x).apply(np.log10)
-    results_df['weblink'] = results_df['domain'].apply(
+    results_df['weblink'] = results_df['term'].apply(
         lambda x: f"https://www.ebi.ac.uk/interpro/entry/{abbr[x[:2]]}/{x}" if x[1].isalpha() else f"https://www.ebi.ac.uk/interpro/entry/cathgene3d/G3DSA:{x}")
     st.dataframe(results_df,column_config={
             "weblink": st.column_config.LinkColumn(
@@ -906,7 +906,12 @@ def disorder_analysis(data: pd.DataFrame, selected_df_name: str):
         'alphadb_disorder',
         'mobidblite_disorder'
     ]
-
+    idp_dict = json.load(open("IDP_ontology.json", "r"))
+    # delete all keys that starts with DP
+    idp_dict = {k: v for k, v in idp_dict.items() if not k.startswith("DP")}
+    results_df = enrichment_analysis(dict=idp_dict, query_uniprots=df_to_uniprots(data), correction='fdr_bh')
+    st.subheader("Enrichment Results")
+    st.dataframe(results_df)
     # Check if numerical columns exist
     disorder_numerical_cols = [col for col in numerical_cols if col in dataidp.columns]
     st.subheader("Disorder Types Box Plot")
