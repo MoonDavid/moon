@@ -224,6 +224,15 @@ def main():
             # Visualization Options (moved to main area for better UX)
             st.subheader("Network Visualization Options")
             physics_enabled = st.checkbox("Enable Physics", value=False)
+            node_size = st.slider("Node Size", min_value=10, max_value=50, value=20)
+            col1, col2 = st.columns(2)
+            with col1:
+                edge_width = st.slider("Edge Width", min_value=1, max_value=10, value=2)
+            with col2:
+                color_scheme = st.selectbox(
+                    "Color Scheme",
+                    options=["Default", "Degree-based", "Community-based"]
+                )
 
             # Network Visualization
             st.subheader("Interactive Network Visualization")
@@ -235,17 +244,59 @@ def main():
                 bgcolor="#ffffff",
                 font_color="black"
             )
-            nt.from_nx(G)
-            pos = nx.spring_layout(G, k=0.15, iterations=200)
+
             # Configure physics
-            for node in nt.get_nodes():
-                nt.get_node(node)['x'] = pos[node][0]
-                nt.get_node(node)['y'] = -pos[node][
-                    1]  # the minus is needed here to respect networkx y-axis convention
-                nt.get_node(node)['physics'] = False
-                nt.get_node(node)['label'] = str(node)
             nt.toggle_physics(physics_enabled)
 
+            # Add nodes and edges with custom styling
+            if color_scheme == "Degree-based":
+                degree_dict = dict(G.degree())
+                max_degree = max(degree_dict.values())
+                for node in G.nodes():
+                    node_color = f"#{int((degree_dict[node] / max_degree) * 255):02x}0000"
+                    nt.add_node(node, label=node, size=node_size, color=node_color)
+            elif color_scheme == "Community-based":
+                communities = nx.community.greedy_modularity_communities(G)
+                color_map = plt.cm.get_cmap('Set3')(np.linspace(0, 1, len(communities)))
+                node_colors = {}
+                for i, comm in enumerate(communities):
+                    for node in comm:
+                        rgb = color_map[i][:3]
+                        node_colors[node] = f"#{int(rgb[0] * 255):02x}{int(rgb[1] * 255):02x}{int(rgb[2] * 255):02x}"
+                for node in G.nodes():
+                    nt.add_node(node, label=node, size=node_size, color=node_colors.get(node, "#97C2FC"))
+            else:
+                for node in G.nodes():
+                    nt.add_node(node, label=node, size=node_size)
+
+            # Add edges with weights
+            for edge in G.edges(data=True):
+                weight = edge[2].get(weight_col, 1)
+                nt.add_edge(edge[0], edge[1], value=weight, width=edge_width)
+
+            # Set other visualization options
+            nt.set_options("""
+                var options = {
+                    "nodes": {
+                        "font": {
+                            "size": 12
+                        }
+                    },
+                    "edges": {
+                        "color": {
+                            "inherit": true
+                        },
+                        "smooth": false
+                    },
+                    "physics": {
+                        "barnesHut": {
+                            "gravitationalConstant": -5000,
+                            "springLength": 95
+                        },
+                        "minVelocity": 0.05
+                    }
+                }
+            """)
 
             # Save and display the network
             try:
