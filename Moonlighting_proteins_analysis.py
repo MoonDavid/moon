@@ -15,6 +15,9 @@ from scipy.stats import hypergeom
 from statsmodels.stats.multitest import multipletests
 import altair as alt
 import json
+import plotly.express as px
+import plotly.graph_objects as go
+
 
 # =======================
 # Helper Functions
@@ -28,7 +31,7 @@ def load_data(file_path: str) -> pd.DataFrame:
     return df
 
 
-def domain_enrichment_analysis(query_uniprots, domain_dict, correction='fdr_bh'):
+def enrichment_analysis(query_uniprots, dict, correction='fdr_bh'):
     """
     Perform over-representation analysis on a set of UniProt IDs ('query_uniprots')
     against a background defined by 'domain_dict' (domain -> list of UniProt IDs).
@@ -53,18 +56,18 @@ def domain_enrichment_analysis(query_uniprots, domain_dict, correction='fdr_bh')
 
     # Build the set of all background UniProt IDs
     all_uniprots = set()
-    for d, uniprot_list in domain_dict.items():
+    for d, uniprot_list in dict.items():
         all_uniprots.update(uniprot_list)
 
     N = len(all_uniprots)  # total background
     n = len(query_set)  # size of the query
 
-    domains = []
+    terms = []
     pvals = []
     k_vals = []
     K_vals = []
 
-    for domain, uniprot_list in domain_dict.items():
+    for term, uniprot_list in dict.items():
         K = len(uniprot_list)  # number of background proteins with this domain
         k = len(query_set.intersection(uniprot_list))  # overlap with query
 
@@ -76,7 +79,7 @@ def domain_enrichment_analysis(query_uniprots, domain_dict, correction='fdr_bh')
             # hypergeom.sf(k-1, N, K, n) => P(X >= k)
             pval = hypergeom.sf(k - 1, N, K, n)
 
-        domains.append(domain)
+        terms.append(term)
         pvals.append(pval)
         k_vals.append(k)
         K_vals.append(K)
@@ -86,7 +89,7 @@ def domain_enrichment_analysis(query_uniprots, domain_dict, correction='fdr_bh')
 
     # Create a DataFrame
     results_df = pd.DataFrame({
-        'domain': domains,
+        'term': terms,
         'k': k_vals,
         'K': K_vals,
         'n': n,
@@ -784,12 +787,12 @@ def interpro_analysis(data: pd.DataFrame, selected_df_name):
     domain_dict = json.load(open("domain_dict.json", "r"))
     #delete all keys that starts with DP
     domain_dict = {k: v for k, v in domain_dict.items() if not k.startswith("DP")}
-    results_df=domain_enrichment_analysis(domain_dict=domain_dict, query_uniprots=df_to_uniprots(data), correction='fdr_bh')
+    results_df=enrichment_analysis(dict=domain_dict, query_uniprots=df_to_uniprots(data), correction='fdr_bh')
     st.subheader("Enrichment Results")
 
     # Add a column for negative log10 p-value (for plotting)
     #results_df["-log10(pval_corrected)"] = -results_df["pval_corrected"].apply(lambda x: 1e-300 if x <= 0 else x).apply(np.log10)
-    results_df['weblink'] = results_df['domain'].apply(
+    results_df['weblink'] = results_df['term'].apply(
         lambda x: f"https://www.ebi.ac.uk/interpro/entry/{abbr[x[:2]]}/{x}" if x[1].isalpha() else f"https://www.ebi.ac.uk/interpro/entry/cathgene3d/G3DSA:{x}")
     st.dataframe(results_df,column_config={
             "weblink": st.column_config.LinkColumn(
@@ -808,8 +811,8 @@ def rna_binding_analysis(data: pd.DataFrame, selected_df_name):
     st.write(f"There are {data['RBP type'].notna().sum()} RBPs annotated in RBPWorld in this dataset.")
 
     # Filter and display relevant RBP data
-    datarbp = data[['UniProtKB-AC', 'Ensembl ID', 'Gene symbol', 'RBP type', 'No. RBPome']]
-    datarbp = datarbp[datarbp['Ensembl ID'].notna()]
+    datarbp = data[['UniProtKB-AC', 'Gene symbol', 'RBP type', 'No. RBPome']]
+    datarbp = datarbp[datarbp['RBP type'].notna()]
     datarbp = datarbp.reset_index(drop=True)
     st.dataframe(datarbp)
 
@@ -852,6 +855,149 @@ def rna_binding_analysis(data: pd.DataFrame, selected_df_name):
     plt.tight_layout()
     st.pyplot(plt)
     plt.clf()  # Clear the figure after plotting
+
+def disorder_analysis(data: pd.DataFrame, selected_df_name: str):
+    """
+    Analyzes disorder-related columns in the given DataFrame and visualizes the data.
+
+    Parameters:
+    - data (pd.DataFrame): The input DataFrame containing disorder information.
+    - selected_df_name (str): The name of the selected DataFrame for display purposes.
+    """
+    # Select relevant columns for disorder analysis
+    disorder_columns = [
+        'UniProtKB-AC',
+        'disprot_id',
+        'disprot_disorder',
+        'curated_disorder',  # Updated column
+        'alphadb_disorder',
+        'mobidblite_disorder'
+    ]
+
+    # Ensure all specified columns exist in the DataFrame
+    missing_cols = set(disorder_columns) - set(data.columns)
+    if missing_cols:
+        st.error(f"The following required columns are missing from the data: {', '.join(missing_cols)}")
+        return
+
+    dataidp = data[disorder_columns].copy()
+    dataidp['disprot_disorder'] = dataidp['disprot_disorder'].apply(
+        lambda x: x / 100 if pd.notnull(x) else x
+    )
+
+    # Display the DataFrame
+    st.subheader("Data Preview")
+    st.dataframe(dataidp)
+
+    # Calculate and display the number of NaNs per column
+    st.subheader("Missing Values Summary")
+    nan_counts = dataidp.isna().sum()
+    nan_df = nan_counts.reset_index()
+    nan_df.columns = ['Column', 'Number of NaNs']
+    st.table(nan_df)
+
+    # Visualize the distribution of disorder columns
+    st.subheader("Disorder regions percentage")
+
+    # Identify numerical disorder columns for plotting
+    numerical_cols = [
+        'disprot_disorder',
+        'curated_disorder',
+        'alphadb_disorder',
+        'mobidblite_disorder'
+    ]
+    idp_dict = json.load(open("IDP_ontology.json", "r"))
+    # delete all keys that starts with DP
+    idp_dict = {k: v for k, v in idp_dict.items() if not k.startswith("DP")}
+    results_df = enrichment_analysis(dict=idp_dict, query_uniprots=df_to_uniprots(data), correction='fdr_bh')
+    st.subheader("Enrichment Results")
+    st.dataframe(results_df)
+    # Check if numerical columns exist
+    disorder_numerical_cols = [col for col in numerical_cols if col in dataidp.columns]
+    st.subheader("Disorder Types Box Plot")
+
+    # Melt the DataFrame to long format for Plotly
+    boxplot_data = dataidp.melt(
+        id_vars=['UniProtKB-AC', 'disprot_id'],
+        value_vars=disorder_numerical_cols,
+        var_name='Disorder Type',
+        value_name='Normalized Disorder Value'
+    )
+
+    # Remove rows with NaN in 'Normalized Disorder Value'
+    boxplot_data = boxplot_data.dropna(subset=['Normalized Disorder Value'])
+
+    # Create the interactive box plot using Plotly Express
+    fig = px.box(
+        boxplot_data,
+        x='Disorder Type',
+        y='Normalized Disorder Value',
+        points='all',  # Show all points
+        title='Disorder region percentage',
+        hover_data=['UniProtKB-AC', 'disprot_id', 'Normalized Disorder Value'],
+        labels={
+            'Disorder Type': 'Disorder Type',
+            'Normalized Disorder Value': 'Normalized Disorder Value (0-1)'
+        },
+        color='Disorder Type'  # Different colors for each disorder type
+    )
+
+    # Update layout for better readability
+    fig.update_layout(
+        boxmode='group',
+        xaxis_title='Disorder Type',
+        yaxis_title='Disorder percentage (0-1)',
+        legend_title='Disorder Type',
+        title_x=0.5  # Center the title
+    )
+    st.plotly_chart(fig, use_container_width=True)
+
+    st.subheader("Disorder Range Analysis")
+
+
+    # Plot distribution of ranges
+    range_data = pd.DataFrame()
+    for col in numerical_cols:
+        dataidp[f'{col}_range'] = pd.cut(
+            dataidp[col],
+            bins=[0, 0.2, 0.4, 0.6, 0.8, 1],
+            labels=['0-20%', '20-40%', '40-60%', '60-80%', '80-100%']
+        )
+
+    # Plot distribution of ranges
+    range_data = []
+    for col in numerical_cols:
+        range_counts = dataidp[f'{col}_range'].value_counts()
+        for range_name, count in range_counts.items():
+            range_data.append({
+                'Range': range_name,
+                'Count': count,
+                'Disorder Type': col
+            })
+    range_data = pd.DataFrame(range_data)
+
+    fig_ranges = px.bar(
+        range_data,
+        x='Range',
+        y='Count',
+        color='Disorder Type',
+        barmode='group',
+        title='Distribution of Disorder Ranges',
+        category_orders={'Range': ['0-20%', '20-40%', '40-60%', '60-80%', '80-100%']}
+    )
+    st.plotly_chart(fig_ranges, use_container_width=True)
+    # Optionally, display correlation matrix
+    st.subheader("Correlation Matrix")
+    if len(disorder_numerical_cols) < 2:
+        st.warning("At least two numerical disorder columns are required to display a correlation matrix.")
+    else:
+        corr = dataidp[disorder_numerical_cols].corr()
+        fig_corr, ax_corr = plt.subplots(figsize=(8, 6))
+        sns.heatmap(corr, annot=True, cmap='coolwarm', ax=ax_corr, fmt=".2f")
+        plt.title('Correlation Matrix of Disorder Columns')
+        plt.tight_layout()
+        st.pyplot(fig_corr)
+        plt.clf()
 
 
 # =======================
@@ -949,6 +1095,9 @@ def main():
         with st.expander("See analysis"):
             # RNA Binding Analysis
             rna_binding_analysis(data,selected_df_name)
+        st.subheader("Intrinsically disordered regions and proteins")
+        with st.expander("See analysis"):
+            disorder_analysis(data,selected_df_name)
 
     # Optionally, you can add other sections outside the expander
 

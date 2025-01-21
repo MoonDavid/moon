@@ -9,10 +9,13 @@ def main():
     )
 
     # Embed the DMRpred website using an iframe
+    st.subheader("MEME")
+    st.write("[MEME Suite](https://meme-suite.org/meme/) is a comprehensive collection of bioinformatics tools designed for the discovery and analysis of sequence motifs in DNA, RNA, and protein sequences. "
+    )
     components.iframe(
-        src="http://biomine.cs.vcu.edu/servers/DMRpred/",
-        width=800,
-        height=500,
+        src="https://meme-suite.org/meme/",
+        width=1000,
+        height=600,
         scrolling=True,
     )
 
