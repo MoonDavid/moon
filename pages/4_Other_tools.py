@@ -18,6 +18,13 @@ def main():
         height=600,
         scrolling=True,
     )
-
+    st.subheader("SLiMFinder")
+    st.write("[SLiMFinder](http://www.slimsuite.unsw.edu.au/servers/slimfinder.php/) is a method to find shared motifs in proteins with a common attribute such as sub-cellular location or a common interaction partner.")
+    components.iframe(
+        src="http://www.slimsuite.unsw.edu.au/servers/slimfinder.php/)",
+        width=1000,
+        height=600,
+        scrolling=True,
+    )
 if __name__ == "__main__":
     main()

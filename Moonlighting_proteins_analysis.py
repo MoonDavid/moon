@@ -422,10 +422,527 @@ def display_categorical_feature(data: pd.DataFrame, column: str, selected_df_nam
             st.success(f"Saved in session state with key `{session_key}`.")
 
 
+import streamlit as st
+import plotly.express as px
+import plotly.figure_factory as ff
+import plotly.graph_objects as go
+from Bio.SeqUtils.ProtParam import ProteinAnalysis
+import pandas as pd
+import numpy as np
 
 
+
+def sequence_analysis_deepseek(filtered_data: pd.DataFrame):
+    """Analyze protein sequences with extended physicochemical properties using interactive Plotly plots and tabs."""
+
+    if 'Sequence' in filtered_data.columns:
+        # Initialize ProteinAnalysis objects
+        st.write("## Protein Sequence Analysis")
+
+        # Create tabs for different plots
+        tab1, tab2, tab3, tab4, tab5 = st.tabs([
+            "Sequence Length", "Amino Acid Composition", "Physicochemical Properties",
+            "Molar Extinction Coefficient", "Secondary Structure"
+        ])
+
+        # 1. Sequence Length
+        filtered_data['sequence_length'] = filtered_data['Sequence'].apply(lambda x: len(x) if pd.notnull(x) else 0)
+
+        with tab1:
+            st.write("### Protein Sequence Length:")
+            st.write(filtered_data['sequence_length'].describe())
+
+            fig = px.histogram(filtered_data, x='sequence_length', nbins=30, title="Distribution of Protein Sequence Lengths")
+            fig.update_layout(xaxis_title="Sequence Length", yaxis_title="Frequency")
+            st.plotly_chart(fig)
+
+        # 2. Amino Acid Composition using ProtParam's get_amino_acids_percent()
+        with tab2:
+            st.write("### Amino Acid Composition:")
+
+            def get_amino_acids_percent(seq: str) -> dict:
+                """Calculate amino acid composition percentage using ProtParam."""
+                try:
+                    prot_param = ProteinAnalysis(seq)
+                    aa_percent = prot_param.get_amino_acids_percent()
+                    # Convert fractions to percentages
+                    aa_percent_scaled = {aa: percent * 100 for aa, percent in aa_percent.items()}
+                    return aa_percent_scaled
+                except Exception as e:
+                    st.error(f"Error calculating amino acid composition: {e}")
+                    return {}
+
+            aa_composition = filtered_data['Sequence'].dropna().apply(get_amino_acids_percent)
+            aa_composition_df = pd.DataFrame(list(aa_composition)).fillna(0)
+            mean_aa_composition = aa_composition_df.mean().sort_values(ascending=False)
+
+            st.write("#### Average Amino Acid Composition (%):")
+            st.dataframe(mean_aa_composition)
+
+            fig = px.bar(mean_aa_composition, x=mean_aa_composition.index, y=mean_aa_composition.values,
+                         labels={'x': 'Amino Acid', 'y': 'Percentage (%)'},
+                         title="Average Amino Acid Composition of Protein Sequences")
+            st.plotly_chart(fig)
+
+            st.write("### Amino Acid Frequency:")
+            fig = px.imshow(aa_composition_df.T, labels=dict(x="Proteins", y="Amino Acids", color="Percentage"),
+                            title="Heatmap of Amino Acid Composition")
+            st.plotly_chart(fig)
+
+        # 3. Physicochemical Properties
+        with tab3:
+            st.write("### Physicochemical Properties of Protein Sequences:")
+
+            def calculate_properties(seq: str) -> pd.Series:
+                """Calculate various physicochemical properties of a protein sequence."""
+                if pd.isnull(seq) or not seq:
+                    return pd.Series({
+                        "Molecular_Weight": None,
+                        "Isoelectric_Point": None,
+                        "Aromaticity": None,
+                        "Instability_Index": None,
+                        "Flexibility": None,
+                        "Gravy": None,
+                        "Molar_Extinction_Reduced": None,
+                        "Molar_Extinction_Oxidized": None,
+                        "Charge_pH7.0": None
+                    })
+                try:
+                    prot_param = ProteinAnalysis(seq)
+                    mw = prot_param.molecular_weight()
+                    pI = prot_param.isoelectric_point()
+                    aromaticity = prot_param.aromaticity()
+                    instability = prot_param.instability_index()
+                    flexibility = prot_param.flexibility()
+                    gravy = prot_param.gravy()
+                    epsilon_reduced, epsilon_oxidized = prot_param.molar_extinction_coefficient()
+                    charge_pH7 = prot_param.charge_at_pH(7.0)
+
+                    return pd.Series({
+                        "Molecular_Weight": mw,
+                        "Isoelectric_Point": pI,
+                        "Aromaticity": aromaticity,
+                        "Instability_Index": instability,
+                        "Flexibility": flexibility,
+                        "Gravy": gravy,
+                        "Molar_Extinction_Reduced": epsilon_reduced,
+                        "Molar_Extinction_Oxidized": epsilon_oxidized,
+                        "Charge_pH7.0": charge_pH7
+                    })
+                except Exception as e:
+                    return pd.Series({
+                        "Molecular_Weight": None,
+                        "Isoelectric_Point": None,
+                        "Aromaticity": None,
+                        "Instability_Index": None,
+                        "Flexibility": None,
+                        "Gravy": None,
+                        "Molar_Extinction_Reduced": None,
+                        "Molar_Extinction_Oxidized": None,
+                        "Charge_pH7.0": None
+                    })
+
+            properties = filtered_data['Sequence'].apply(calculate_properties)
+            filtered_data = pd.concat([filtered_data, properties], axis=1)
+
+            # Helper function to safely plot histograms
+            def safe_histplot(data, xlabel, ylabel, title):
+                data = data.dropna()
+                if len(data) > 0:
+                    fig = px.histogram(data, x=data, nbins=30, title=title)
+                    fig.update_layout(xaxis_title=xlabel, yaxis_title=ylabel)
+                    st.plotly_chart(fig)
+                else:
+                    st.write(f"No data available for {title}.")
+
+            # 3.1 Molecular Weight Statistics
+            st.write("#### Molecular Weight Statistics:")
+            st.write(filtered_data['Molecular_Weight'].describe())
+            safe_histplot(filtered_data['Molecular_Weight'], "Molecular Weight (Da)", "Frequency", "Distribution of Protein Molecular Weight")
+
+            # 3.2 Isoelectric Point Statistics
+            st.write("#### Isoelectric Point (pI) Statistics:")
+            st.write(filtered_data['Isoelectric_Point'].describe())
+            safe_histplot(filtered_data['Isoelectric_Point'], "Isoelectric Point (pI)", "Frequency", "Distribution of Protein Isoelectric Point")
+
+            # 3.3 Aromaticity Statistics
+            st.write("#### Aromaticity Statistics:")
+            st.write(filtered_data['Aromaticity'].describe())
+            safe_histplot(filtered_data['Aromaticity'], "Aromaticity", "Frequency", "Distribution of Protein Aromaticity")
+
+            # 3.4 Instability Index Statistics
+            st.write("#### Instability Index Statistics:")
+            st.write(filtered_data['Instability_Index'].describe())
+            safe_histplot(filtered_data['Instability_Index'], "Instability Index", "Frequency", "Distribution of Protein Instability Index")
+
+            # Highlight unstable proteins (Instability Index > 40)
+            unstable = filtered_data[filtered_data['Instability_Index'] > 40]
+            st.write(f"**Number of Unstable Proteins (Instability Index > 40):** {unstable.shape[0]}")
+
+            # 3.6 Gravy (Grand Average of Hydropathy) Statistics
+            st.write("#### Gravy (Grand Average of Hydropathy) Statistics:")
+            st.write(filtered_data['Gravy'].describe())
+            safe_histplot(filtered_data['Gravy'], "Gravy (Hydropathy)", "Frequency", "Distribution of Protein Gravy (Hydropathy)")
+
+            # 3.8 Charge at pH 7.0 Statistics
+            st.write("#### Charge at pH 7.0 Statistics:")
+            st.write(filtered_data['Charge_pH7.0'].describe())
+            safe_histplot(filtered_data['Charge_pH7.0'], "Charge at pH 7.0", "Frequency", "Distribution of Protein Charge at pH 7.0")
+
+        # 3.7 Molar Extinction Coefficient Statistics
+        with tab4:
+            st.write("#### Molar Extinction Coefficient (ε) Statistics:")
+            st.write(filtered_data[['Molar_Extinction_Reduced', 'Molar_Extinction_Oxidized']].describe())
+
+            epsilon_reduced = filtered_data['Molar_Extinction_Reduced'].dropna()
+            epsilon_oxidized = filtered_data['Molar_Extinction_Oxidized'].dropna()
+
+            if len(epsilon_reduced) > 0 or len(epsilon_oxidized) > 0:
+                fig = px.histogram(epsilon_reduced, nbins=30, title="Distribution of Molar Extinction Coefficient (Reduced Cysteines)")
+                fig.update_layout(xaxis_title="Molar Extinction Coefficient (ε)", yaxis_title="Frequency")
+                st.plotly_chart(fig)
+
+                fig = px.histogram(epsilon_oxidized, nbins=30, title="Distribution of Molar Extinction Coefficient (Disulfide Bridges)")
+                fig.update_layout(xaxis_title="Molar Extinction Coefficient (ε)", yaxis_title="Frequency")
+                st.plotly_chart(fig)
+            else:
+                st.write("No data available to plot Molar Extinction Coefficient.")
+
+        # 4. Secondary Structure Analysis
+        with tab5:
+            st.write("### Secondary Structure Analysis:")
+
+            def calculate_secondary_structure(seq: str) -> pd.Series:
+                """Calculate secondary structure fractions of a protein sequence."""
+                if pd.isnull(seq) or not seq:
+                    return pd.Series({
+                        "Fraction_Alpha_Helix": None,
+                        "Fraction_Turn": None,
+                        "Fraction_Beta_Sheet": None
+                    })
+                try:
+                    prot_param = ProteinAnalysis(seq)
+                    ss_frac = prot_param.secondary_structure_fraction()
+                    # ProtParam returns (helix, turn, sheet)
+                    return pd.Series({
+                        "Fraction_Alpha_Helix": ss_frac[0],
+                        "Fraction_Turn": ss_frac[1],
+                        "Fraction_Beta_Sheet": ss_frac[2]
+                    })
+                except Exception as e:
+                    st.error(f"Error processing secondary structure for sequence: {e}")
+                    return pd.Series({
+                        "Fraction_Alpha_Helix": None,
+                        "Fraction_Turn": None,
+                        "Fraction_Beta_Sheet": None
+                    })
+
+            secondary_structure = filtered_data['Sequence'].apply(calculate_secondary_structure)
+            filtered_data = pd.concat([filtered_data, secondary_structure], axis=1)
+
+            # 4.1 Secondary Structure Statistics
+            st.write("#### Secondary Structure Fractions:")
+            st.write(filtered_data[['Fraction_Alpha_Helix', 'Fraction_Turn', 'Fraction_Beta_Sheet']].describe())
+
+            # 4.2 Plot Average Secondary Structure Fractions
+            ss_df = filtered_data[['Fraction_Alpha_Helix', 'Fraction_Turn', 'Fraction_Beta_Sheet']].dropna()
+            if not ss_df.empty:
+                fig = px.box(ss_df, title="Distribution of Secondary Structure Fractions")
+                fig.update_layout(yaxis_title="Fraction", xaxis_title="Secondary Structure Type")
+                st.plotly_chart(fig)
+            else:
+                st.write("No data available to plot Secondary Structure Fractions.")
 
 def sequence_analysis(filtered_data: pd.DataFrame):
+    """Analyze protein sequences with extended physicochemical properties, with interactive plots and tabbed layout."""
+
+    if 'Sequence' not in filtered_data.columns:
+        st.error("The 'Sequence' column is missing in the DataFrame.")
+        return
+
+    st.write("## Protein Sequence Analysis")
+
+    # 1. Sequence Length
+    filtered_data['sequence_length'] = filtered_data['Sequence'].apply(lambda x: len(x) if pd.notnull(x) else 0)
+
+    # --- Tabs for different plot types ---
+    tabs = st.tabs([
+        "Sequence Length",
+        "Amino Acid Composition",
+        "Physicochemical Properties",
+        "Secondary Structure"
+    ])
+
+
+    with tabs[0]:
+        st.write("### Protein Sequence Length:")
+        st.write(filtered_data['sequence_length'].describe())
+
+        fig = px.histogram(
+            filtered_data,
+            x='sequence_length',
+            title="Distribution of Protein Sequence Lengths",
+            labels={'sequence_length': 'Sequence Length', 'count': 'Frequency'},
+            color_discrete_sequence=['salmon']
+        )
+        st.plotly_chart(fig)
+
+
+
+    with tabs[1]:
+        st.write("### Amino Acid Composition:")
+
+        def get_amino_acids_percent(seq: str) -> dict:
+            """Calculate amino acid composition percentage using ProtParam."""
+            try:
+                prot_param = ProteinAnalysis(seq)
+                aa_percent = prot_param.get_amino_acids_percent()
+                # Convert fractions to percentages
+                aa_percent_scaled = {aa: percent * 100 for aa, percent in aa_percent.items()}
+                return aa_percent_scaled
+            except Exception as e:
+                st.error(f"Error calculating amino acid composition: {e}")
+                return {}
+
+        aa_composition = filtered_data['Sequence'].dropna().apply(get_amino_acids_percent)
+        aa_composition_df = pd.DataFrame(list(aa_composition)).fillna(0)
+        mean_aa_composition = aa_composition_df.mean().sort_values(ascending=False)
+
+        st.write("#### Average Amino Acid Composition (%):")
+        st.dataframe(mean_aa_composition)
+        fig_aa_bar = px.bar(
+            x=mean_aa_composition.index,
+            y=mean_aa_composition.values,
+            title="Average Amino Acid Composition of Protein Sequences",
+            labels={'x': "Amino Acid", 'y': "Percentage (%)"},
+             color_discrete_sequence=px.colors.sequential.Magma
+        )
+        fig_aa_bar.update_xaxes(tickangle=90)
+        st.plotly_chart(fig_aa_bar)
+
+
+        st.write("### Amino Acid Frequency:")
+        if not aa_composition_df.empty:
+            fig_aa_heatmap = px.imshow(
+                aa_composition_df.T,
+                labels=dict(x="Proteins", y="Amino Acids", color="Percentage"),
+                title="Heatmap of Amino Acid Composition",
+                color_continuous_scale="YlGnBu"
+            )
+            st.plotly_chart(fig_aa_heatmap)
+        else:
+            st.write("No data to display Amino Acid Frequency Heatmap")
+
+
+    with tabs[2]:
+        st.write("### Physicochemical Properties of Protein Sequences:")
+
+        def calculate_properties(seq: str) -> pd.Series:
+                """Calculate various physicochemical properties of a protein sequence."""
+                if pd.isnull(seq) or not seq:
+                    return pd.Series({
+                        "Molecular_Weight": None,
+                        "Isoelectric_Point": None,
+                        "Aromaticity": None,
+                        "Instability_Index": None,
+                        "Flexibility": None,
+                        "Gravy": None,
+                        "Molar_Extinction_Reduced": None,
+                        "Molar_Extinction_Oxidized": None,
+                        "Charge_pH7.0": None
+                    })
+                try:
+                    prot_param = ProteinAnalysis(seq)
+                    mw = prot_param.molecular_weight()
+                    pI = prot_param.isoelectric_point()
+                    aromaticity = prot_param.aromaticity()
+                    instability = prot_param.instability_index()
+                    flexibility = prot_param.flexibility()
+                    gravy = prot_param.gravy()
+                    epsilon_reduced, epsilon_oxidized = prot_param.molar_extinction_coefficient()
+                    charge_pH7 = prot_param.charge_at_pH(7.0)
+
+                    return pd.Series({
+                        "Molecular_Weight": mw,
+                        "Isoelectric_Point": pI,
+                        "Aromaticity": aromaticity,
+                        "Instability_Index": instability,
+                        "Flexibility": flexibility,
+                        "Gravy": gravy,
+                        "Molar_Extinction_Reduced": epsilon_reduced,
+                        "Molar_Extinction_Oxidized": epsilon_oxidized,
+                        "Charge_pH7.0": charge_pH7
+                    })
+                except Exception as e:
+                    #st.error(f"Error processing sequence: {e}")
+                    return pd.Series({
+                        "Molecular_Weight": None,
+                        "Isoelectric_Point": None,
+                        "Aromaticity": None,
+                        "Instability_Index": None,
+                        "Flexibility": None,
+                        "Gravy": None,
+                        "Molar_Extinction_Reduced": None,
+                        "Molar_Extinction_Oxidized": None,
+                        "Charge_pH7.0": None
+                    })
+
+        properties = filtered_data['Sequence'].apply(calculate_properties)
+        filtered_data = pd.concat([filtered_data, properties], axis=1)
+
+
+        # Helper function to safely plot histograms
+        def safe_interactive_histplot(data, xlabel, title, color):
+                data = data.dropna()
+                if len(data) > 0:
+                    fig = px.histogram(
+                        x=data,
+                        title=title,
+                         labels={'x': xlabel, 'count': 'Frequency'},
+                       color_discrete_sequence=[color]
+                    )
+                    st.plotly_chart(fig)
+                else:
+                    st.write(f"No data available for {title}.")
+
+
+        # 3.1 Molecular Weight Statistics
+        st.write("#### Molecular Weight Statistics:")
+        st.write(filtered_data['Molecular_Weight'].describe())
+        safe_interactive_histplot(
+            filtered_data['Molecular_Weight'],
+            xlabel="Molecular Weight (Da)",
+            title="Distribution of Protein Molecular Weight",
+            color='teal'
+        )
+
+        # 3.2 Isoelectric Point Statistics
+        st.write("#### Isoelectric Point (pI) Statistics:")
+        st.write(filtered_data['Isoelectric_Point'].describe())
+        safe_interactive_histplot(
+             filtered_data['Isoelectric_Point'],
+             xlabel="Isoelectric Point (pI)",
+            title="Distribution of Protein Isoelectric Point",
+            color='orange'
+        )
+
+        # 3.3 Aromaticity Statistics
+        st.write("#### Aromaticity Statistics:")
+        st.write(filtered_data['Aromaticity'].describe())
+        safe_interactive_histplot(
+            filtered_data['Aromaticity'],
+            xlabel="Aromaticity",
+            title="Distribution of Protein Aromaticity",
+            color='purple'
+        )
+
+        # 3.4 Instability Index Statistics
+        st.write("#### Instability Index Statistics:")
+        st.write(filtered_data['Instability_Index'].describe())
+        safe_interactive_histplot(
+            filtered_data['Instability_Index'],
+            xlabel="Instability Index",
+            title="Distribution of Protein Instability Index",
+            color='darkred'
+        )
+
+        # Highlight unstable proteins (Instability Index > 40)
+        unstable = filtered_data[filtered_data['Instability_Index'] > 40]
+        st.write(f"**Number of Unstable Proteins (Instability Index > 40):** {unstable.shape[0]}")
+
+
+        # 3.6 Gravy (Grand Average of Hydropathy) Statistics
+        st.write("#### Gravy (Grand Average of Hydropathy) Statistics:")
+        st.write(filtered_data['Gravy'].describe())
+        safe_interactive_histplot(
+            filtered_data['Gravy'],
+            xlabel="Gravy (Hydropathy)",
+            title="Distribution of Protein Gravy (Hydropathy)",
+            color='gold'
+        )
+
+        # 3.7 Molar Extinction Coefficient Statistics
+        st.write("#### Molar Extinction Coefficient (ε) Statistics:")
+        st.write(filtered_data[['Molar_Extinction_Reduced', 'Molar_Extinction_Oxidized']].describe())
+
+        # Plot Molar Extinction Coefficients
+        epsilon_reduced = filtered_data['Molar_Extinction_Reduced'].dropna()
+        epsilon_oxidized = filtered_data['Molar_Extinction_Oxidized'].dropna()
+
+        if len(epsilon_reduced) > 0 or len(epsilon_oxidized) > 0:
+                fig_epsilon = px.histogram(
+                [epsilon_reduced,epsilon_oxidized],
+                labels=dict(variable='Type',value="Molar Extinction Coefficient (ε)",count="Frequency"),
+                title="Distribution of Molar Extinction Coefficient",
+                color_discrete_sequence=['navy','magenta']
+                )
+                fig_epsilon.update_traces(opacity=0.75)
+                st.plotly_chart(fig_epsilon)
+        else:
+            st.write("No data available to plot Molar Extinction Coefficient.")
+
+
+        # 3.8 Charge at pH 7.0 Statistics
+        st.write("#### Charge at pH 7.0 Statistics:")
+        st.write(filtered_data['Charge_pH7.0'].describe())
+        safe_interactive_histplot(
+            filtered_data['Charge_pH7.0'],
+            xlabel="Charge at pH 7.0",
+            title="Distribution of Protein Charge at pH 7.0",
+            color='brown'
+        )
+
+
+    with tabs[3]:
+         # 4. Secondary Structure Analysis
+        st.write("### Secondary Structure Analysis:")
+
+        def calculate_secondary_structure(seq: str) -> pd.Series:
+            """Calculate secondary structure fractions of a protein sequence."""
+            if pd.isnull(seq) or not seq:
+                return pd.Series({
+                    "Fraction_Alpha_Helix": None,
+                    "Fraction_Turn": None,
+                    "Fraction_Beta_Sheet": None
+                })
+            try:
+                prot_param = ProteinAnalysis(seq)
+                ss_frac = prot_param.secondary_structure_fraction()
+                # ProtParam returns (helix, turn, sheet)
+                return pd.Series({
+                    "Fraction_Alpha_Helix": ss_frac[0],
+                    "Fraction_Turn": ss_frac[1],
+                    "Fraction_Beta_Sheet": ss_frac[2]
+                })
+            except Exception as e:
+                st.error(f"Error processing secondary structure for sequence: {e}")
+                return pd.Series({
+                    "Fraction_Alpha_Helix": None,
+                    "Fraction_Turn": None,
+                    "Fraction_Beta_Sheet": None
+                })
+
+        secondary_structure = filtered_data['Sequence'].apply(calculate_secondary_structure)
+        filtered_data = pd.concat([filtered_data, secondary_structure], axis=1)
+
+        # 4.1 Secondary Structure Statistics
+        st.write("#### Secondary Structure Fractions:")
+        st.write(filtered_data[['Fraction_Alpha_Helix', 'Fraction_Turn', 'Fraction_Beta_Sheet']].describe())
+
+        # 4.2 Plot Average Secondary Structure Fractions
+        ss_df = filtered_data[['Fraction_Alpha_Helix', 'Fraction_Turn', 'Fraction_Beta_Sheet']].dropna()
+        if not ss_df.empty:
+                fig_ss = px.box(
+                    ss_df,
+                    labels=dict(variable="Secondary Structure Type",value="Fraction"),
+                    title="Distribution of Secondary Structure Fractions",
+                    color_discrete_sequence=px.colors.qualitative.Vivid
+                )
+                st.plotly_chart(fig_ss)
+        else:
+            st.write("No data available to plot Secondary Structure Fractions.")
+
+def sequence_analysis1(filtered_data: pd.DataFrame):
     """Analyze protein sequences with extended physicochemical properties."""
 
     if 'Sequence' in filtered_data.columns:
@@ -992,12 +1509,29 @@ def disorder_analysis(data: pd.DataFrame, selected_df_name: str):
         st.warning("At least two numerical disorder columns are required to display a correlation matrix.")
     else:
         corr = dataidp[disorder_numerical_cols].corr()
-        fig_corr, ax_corr = plt.subplots(figsize=(8, 6))
-        sns.heatmap(corr, annot=True, cmap='coolwarm', ax=ax_corr, fmt=".2f")
-        plt.title('Correlation Matrix of Disorder Columns')
-        plt.tight_layout()
-        st.pyplot(fig_corr)
-        plt.clf()
+
+        # Create the interactive heatmap using Plotly
+        fig = px.imshow(corr,
+                        x=corr.columns,
+                        y=corr.index,
+                        color_continuous_scale='RdBu',
+                        text_auto=True
+                        )
+
+        # Remove axis names
+        fig.update_xaxes(title_text='')
+        fig.update_yaxes(title_text='')
+
+        # Make the chart bigger
+        fig.update_layout(
+            title='Correlation Matrix of Disorder Columns',
+            height=600,  # Adjust height as needed
+            width=800,  # Adjust width as needed
+            margin=dict(l=20, r=20, t=40, b=20)  # Adjust margins as needed
+
+        )
+
+        st.plotly_chart(fig, use_container_width=True)
 
 
 # =======================
@@ -1039,9 +1573,9 @@ def main():
         Crea un dataset filtrato per le analisi successive selezionando i database di interesse e se vuoi l'intersezione o l'unione dei risultati.
         Di default ce ne sono gia' 3:
 
-        * Intersezione di MoonProt e MultiTaskProtDB (Più restrittivo)
-        * Unione di MoonProt e MultiTaskProtDB
-        * Unione di tutti e 3 i database (meno restrittivo)
+        * Intersezione di MoonProt e MultiTaskProtDB (più restrittivo) \t\t\t :green[humanMPs(MoonProt AND MultiTaskProtDB)]
+        * Unione di MoonProt e MultiTaskProtDB \t\t\t :green[humanMPs(MoonProt OR MultiTaskProtDB)]
+        * Unione di tutti e 3 i database (meno restrittivo) \t\t\t :green[humanMPs_all]
     """)
 
     filtered_data = filter_proteins(df)
@@ -1058,48 +1592,70 @@ def main():
     if 'index' not in st.session_state:
         st.session_state['index'] = None
 
-    selected_df_name = st.selectbox(
-        "Select a DataFrame for successive analysis:",
-        df_names,
-        key='selected_df',
-        index=st.session_state['index'],
-        on_change=on_change
-    )
+        # Define the form
+    with st.form("data_selection_form"):
+        selected_df_name = st.selectbox(
+            "Select a DataFrame for successive analysis:",
+            df_names,
+            key='selected_df',
+            index=st.session_state['index']
+        )
 
-    if selected_df_name:
-        data = df_from_uniprots(df, st.session_state[selected_df_name])
+        remove_unreviewed = st.checkbox("Remove unreviewed proteins")
+
+        # Submit button
+        submitted = st.form_submit_button("Submit")
+
+        if submitted:
+            # Update session state with the selected DataFrame name
+            st.session_state['index'] = df_names.index(selected_df_name) if selected_df_name in df_names else 0
+
+
+
+    # Use the stored selections if available
+    if selected_df_name in st.session_state:
+        selected_df_uniprots = st.session_state[selected_df_name]
+        data = df_from_uniprots(df, selected_df_uniprots)
+
+        if remove_unreviewed:
+            initial_count = data.shape[0]
+            data = data[~data['Reviewed'].str.contains('unreviewed', case=False, na=False)]
+            removed_count = initial_count - data.shape[0]
+            st.success(f"Unreviewed proteins removed: {removed_count}. Total number of proteins: {data.shape[0]}.")
+        else:
+            st.info("Including unreviewed proteins.")
+
+        # Display the DataFrame
         st.dataframe(data)
-        st.write(f"Total number of proteins: {data.shape[0]} ("
-        f"Number of reviewed proteins: {data[data['Reviewed']=='reviewed'].shape[0]}, "
-        f"Number of non-reviewed proteins: {data['Reviewed'].str.contains('unreviewed').sum()})")
-        #make a check to remove unreviewed proteins
-        if st.button("Remove unreviewed proteins"):
-            data = data.drop(data[data['Reviewed'].str.contains('unreviewed')].index)
-            st.success(f"Unreviewed proteins removed. Total number of proteins: {data.shape[0]}.")
 
+        # Display summary statistics
+        total_proteins = data.shape[0]
+        reviewed_count = data[data['Reviewed'] == 'reviewed'].shape[0]
+        unreviewed_count = data['Reviewed'].str.contains('unreviewed', case=False, na=False).sum()
 
+        st.write(
+            f"**Total number of proteins:** {total_proteins}\n"
+            f"**Number of reviewed proteins:** {reviewed_count}\n"
+            f"**Number of non-reviewed proteins:** {unreviewed_count}"
+        )
+
+        # Subsequent Analyses Sections
         st.subheader("GO terms")
         with st.expander("See analysis"):
-            # Feature Analysis
-            feature_analysis(data,selected_df_name)
+            feature_analysis(data, selected_df_name)
+
         st.subheader("Protein physicochemical features ")
-        if st.button("Run analysis"):
-            with st.expander("See analysis", expanded=True):
-                # Sequence Analysis
-                sequence_analysis(data)
-        st.subheader("Protein domains")
-        with st.expander("See analysis"):
-            # InterPro Domain Analysis
-            interpro_analysis(data, selected_df_name)
+        # Automatically run analysis without a button
+        with st.expander("See analysis Gemini"):
+            sequence_analysis(data)
+
         st.subheader("RNA binding proteins")
         with st.expander("See analysis"):
-            # RNA Binding Analysis
-            rna_binding_analysis(data,selected_df_name)
+            rna_binding_analysis(data, selected_df_name)
+
         st.subheader("Intrinsically disordered regions and proteins")
         with st.expander("See analysis"):
-            disorder_analysis(data,selected_df_name)
-
-    # Optionally, you can add other sections outside the expander
+            disorder_analysis(data, selected_df_name)
 
 
 if __name__ == "__main__":
