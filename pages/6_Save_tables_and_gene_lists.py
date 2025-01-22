@@ -48,7 +48,7 @@ def main():
         st.warning("No UniProt ID lists available in the session state to save as identifiers.")
     data_type = st.selectbox(
         "Select the type of data you want to save:",
-        ("UniProtID list", "Table", "Fasta")
+        ("UniProtID list", "Table", "FASTA")
     )
     diz = {'tab': '\t', 'whitespace': ' ', 'newline': '\n', ',': ',', ';': ';', '|': '|'}
 
@@ -73,7 +73,7 @@ def main():
             "Select the table to save:",
             available_uniprot_lists
         )
-    elif data_type == "Fasta":
+    elif data_type == "FASTA":
         selected_fasta = st.selectbox(
             "Select the table with sequences to save in fasta format:",
             available_uniprot_lists
