@@ -12,3 +12,4 @@ networkx
 pyvis
 scipy
 statsmodels
+spacy
