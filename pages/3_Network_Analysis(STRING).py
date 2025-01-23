@@ -726,9 +726,7 @@ def main():
 
     # Route to appropriate UI function
     if api_method == "Get Protein-Protein Interactions":
-<<<<<<< HEAD
         show_interactions_ui(species, limit)
-=======
         st.header("🔗 Get Protein-Protein Interactions")
         available_gene_lists = {key: value for key, value in st.session_state.items() if isinstance(value, list)}
         if available_gene_lists:
