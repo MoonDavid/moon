@@ -1,7 +1,6 @@
 import streamlit as st
 import requests
 import pandas as pd
-import urllib.parse
 import networkx as nx
 import matplotlib.pyplot as plt
 from pyvis.network import Network
@@ -539,14 +538,19 @@ def show_interactions_ui(species: int, limit: int):
 
     # Let user pick which gene list to use
     sorted_gene_list_keys = list(available_gene_lists.keys())
-    selected_gene_list = st.selectbox(
-        "Select the gene list to convert:",
-        options=sorted_gene_list_keys,
-        format_func=lambda x: x if x else "No list available"
-    )
+    with st.form("gene_list_form"):
+        # Add the selectbox inside the form
+        selected_gene_list = st.selectbox(
+            "Select the gene list to convert:",
+            options=sorted_gene_list_keys,
+        )
 
-    proteins_input = ','.join(available_gene_lists[selected_gene_list])
+        # Add a submit button
+        submit_button = st.form_submit_button("Submit")
 
+    proteins = ','.join(available_gene_lists[selected_gene_list])
+    st.write(f"Selected gene list: {selected_gene_list}")
+    st.write(f"Protein IDs: {proteins}")
     # Sidebar parameters
     required_score = st.sidebar.slider(
         "Required Score",
@@ -557,12 +561,7 @@ def show_interactions_ui(species: int, limit: int):
         help="Minimum required score for interactions."
     )
 
-    if st.button("Get Interactions"):
-        proteins = [
-            p.strip()
-            for p in proteins_input.replace(',', '\n').split('\n')
-            if p.strip()
-        ]
+    if submit_button:
         if proteins:
             try:
                 with st.spinner("Fetching interactions..."):
@@ -572,16 +571,17 @@ def show_interactions_ui(species: int, limit: int):
                         species=species,
                         limit=limit
                     )
-
-                    interactions_df['UniProtSource'] = interactions_df.iloc[:, 0].map(string_to_uniprots)
-                    interactions_df['UniProtTarget'] = interactions_df.iloc[:, 1].map(string_to_uniprots)
+                    st.write(f"**Number of Interactions:** {len(interactions_df)}")
+                    #interactions_df['UniProtSource'] = interactions_df.iloc[:, 0].map(string_to_uniprots)
+                    #interactions_df['UniProtTarget'] = interactions_df.iloc[:, 1].map(string_to_uniprots)
                     st.dataframe(interactions_df)
                     # Store data in session
                     st.session_state["interactions_df"] = interactions_df
+
                     st.session_state["G"] = nx.from_pandas_edgelist(
                         interactions_df,
-                        source=interactions_df.columns[2],
-                        target=interactions_df.columns[3],
+                        source='preferredName_A',
+                        target='preferredName_B',
                         edge_attr=interactions_df.columns[2],
                         create_using=nx.Graph()
                     )
@@ -727,149 +727,6 @@ def main():
     # Route to appropriate UI function
     if api_method == "Get Protein-Protein Interactions":
         show_interactions_ui(species, limit)
-        st.header("🔗 Get Protein-Protein Interactions")
-        available_gene_lists = {key: value for key, value in st.session_state.items() if isinstance(value, list)}
-        if available_gene_lists:
-            sorted_gene_list_keys = list(available_gene_lists.keys())
-            selected_gene_list = st.selectbox(
-                "Select the gene list to convert:",
-                options=sorted_gene_list_keys,
-                format_func=lambda x: x if x else "No list available"
-            )
-        proteins_input = ','.join(available_gene_lists[selected_gene_list])
-        required_score = st.sidebar.slider("Required Score", min_value=0, max_value=1000, value=400, step=50,
-                                           help="Minimum required score for interactions.")
-
-        if st.button("Get Interactions"):
-            proteins = [p.strip() for p in proteins_input.replace(',', '\n').split('\n') if p.strip()]
-            if proteins:
-                try:
-                    with st.spinner("Fetching interactions..."):
-                        interactions_df = get_interactions(proteins, required_score=required_score)
-                        # Store the data in session state
-                        st.session_state.interactions_df = interactions_df
-                        st.session_state.G = nx.from_pandas_edgelist(
-                            interactions_df,
-                            source=interactions_df.columns[0],
-                            target=interactions_df.columns[1],
-                            edge_attr=interactions_df.columns[2],
-                            create_using=nx.Graph()
-                        )
-                except Exception as e:
-                    st.error(f"Error: {e}")
-                    return
-
-        # Only show visualization options and results if we have data
-        if 'interactions_df' in st.session_state and 'G' in st.session_state:
-            interactions_df = st.session_state.interactions_df
-            G = st.session_state.G
-            source_col, target_col, weight_col = interactions_df.columns[:3]
-
-            st.success("Interactions retrieved!")
-            st.dataframe(interactions_df)
-            st.write(f"**Number of Interactions:** {len(interactions_df)}")
-
-            # Network Analysis
-            density = nx.density(G)
-            st.write(f"**Network Density:** {density:.4f}")
-
-            centrality_df = pd.DataFrame({
-                "Degree": nx.degree_centrality(G),
-                "Betweenness": nx.betweenness_centrality(G),
-                "Closeness": nx.closeness_centrality(G),
-                "Eigenvector": nx.eigenvector_centrality(G, max_iter=1000)
-            }).round(4)
-
-            st.dataframe(centrality_df)
-            top_degree = centrality_df['Degree'].sort_values(ascending=False).head(5).index.tolist()
-            st.write(f"**Top 5 Nodes by Degree Centrality:** {', '.join(top_degree)}")
-
-            # Visualization Options (moved to main area for better UX)
-            st.subheader("Network Visualization Options")
-            physics_enabled = st.checkbox("Enable Physics", value=False)
-            node_size = st.slider("Node Size", min_value=10, max_value=50, value=20)
-            col1, col2 = st.columns(2)
-            with col1:
-                edge_width = st.slider("Edge Width", min_value=1, max_value=10, value=2)
-            with col2:
-                color_scheme = st.selectbox(
-                    "Color Scheme",
-                    options=["Default", "Degree-based", "Community-based"]
-                )
-
-            # Network Visualization
-            st.subheader("Interactive Network Visualization")
-
-            # Create Pyvis network
-            nt = Network(
-                height="600px",
-                width="100%",
-                bgcolor="#ffffff",
-                font_color="black"
-            )
-
-            # Configure physics
-            nt.toggle_physics(physics_enabled)
-
-            # Add nodes and edges with custom styling
-            if color_scheme == "Degree-based":
-                degree_dict = dict(G.degree())
-                max_degree = max(degree_dict.values())
-                for node in G.nodes():
-                    node_color = f"#{int((degree_dict[node] / max_degree) * 255):02x}0000"
-                    nt.add_node(node, label=node, size=node_size, color=node_color)
-            elif color_scheme == "Community-based":
-                communities = nx.community.greedy_modularity_communities(G)
-                color_map = plt.cm.get_cmap('Set3')(np.linspace(0, 1, len(communities)))
-                node_colors = {}
-                for i, comm in enumerate(communities):
-                    for node in comm:
-                        rgb = color_map[i][:3]
-                        node_colors[node] = f"#{int(rgb[0] * 255):02x}{int(rgb[1] * 255):02x}{int(rgb[2] * 255):02x}"
-                for node in G.nodes():
-                    nt.add_node(node, label=node, size=node_size, color=node_colors.get(node, "#97C2FC"))
-            else:
-                for node in G.nodes():
-                    nt.add_node(node, label=node, size=node_size)
-
-            # Add edges with weights
-            for edge in G.edges(data=True):
-                weight = edge[2].get(weight_col, 1)
-                nt.add_edge(edge[0], edge[1], value=weight, width=edge_width)
-
-            # Set other visualization options
-            nt.set_options("""
-                var options = {
-                    "nodes": {
-                        "font": {
-                            "size": 12
-                        }
-                    },
-                    "edges": {
-                        "color": {
-                            "inherit": true
-                        },
-                        "smooth": false
-                    },
-                    "physics": {
-                        "barnesHut": {
-                            "gravitationalConstant": -5000,
-                            "springLength": 95
-                        },
-                        "minVelocity": 0.05
-                    }
-                }
-            """)
-
-            # Save and display the network
-            try:
-                path = "network.html"
-                nt.save_graph(path)
-                with open(path, 'r', encoding='utf-8') as file:
-                    html_content = file.read()
-                st.components.v1.html(html_content, height=600)
-            except Exception as viz_error:
-                st.error(f"Visualization Error: {viz_error}")
 
     elif api_method == "Get Protein Information":
         show_protein_info_ui(species)
