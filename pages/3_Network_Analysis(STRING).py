@@ -873,12 +873,9 @@ def main():
             except Exception as viz_error:
                 st.error(f"Visualization Error: {viz_error}")
 
->>>>>>> origin/main
     elif api_method == "Get Protein Information":
         show_protein_info_ui(species)
     else:  # "Enrichment Analysis"
         show_enrichment_ui(species)
-
-
 if __name__ == "__main__":
     main()
