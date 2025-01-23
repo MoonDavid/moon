@@ -549,8 +549,7 @@ def show_interactions_ui(species: int, limit: int):
         submit_button = st.form_submit_button("Submit")
 
     proteins = ','.join(available_gene_lists[selected_gene_list])
-    st.write(f"Selected gene list: {selected_gene_list}")
-    st.write(f"Protein IDs: {proteins}")
+
     # Sidebar parameters
     required_score = st.sidebar.slider(
         "Required Score",
@@ -562,6 +561,7 @@ def show_interactions_ui(species: int, limit: int):
     )
 
     if submit_button:
+        st.write(f"Selected gene list: {selected_gene_list}")
         if proteins:
             try:
                 with st.spinner("Fetching interactions..."):
