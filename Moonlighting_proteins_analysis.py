@@ -422,15 +422,6 @@ def display_categorical_feature(data: pd.DataFrame, column: str, selected_df_nam
             st.success(f"Saved in session state with key `{session_key}`.")
 
 
-import streamlit as st
-import plotly.express as px
-import plotly.figure_factory as ff
-import plotly.graph_objects as go
-from Bio.SeqUtils.ProtParam import ProteinAnalysis
-import pandas as pd
-import numpy as np
-
-
 
 def sequence_analysis_deepseek(filtered_data: pd.DataFrame):
     """Analyze protein sequences with extended physicochemical properties using interactive Plotly plots and tabs."""

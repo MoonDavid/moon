@@ -35,7 +35,7 @@ def run_gprofiler_profile():
 
     selected_options = []
 
-    with st.form(key='enrichment_form'):
+    with st.form(key='enrichment_form_gProfiler'):
         st.write("### Select the Gene List and GO Namespaces:")
 
         # Select the list of genes from session state
