@@ -3,11 +3,88 @@ import gseapy as gp
 import pandas as pd
 from io import StringIO
 
+import pandas as pd
+import plotly.graph_objects as go
+import plotly.colors
+import numpy as np
+import io
+def create_enrichment_plot(df):
+    """
+    Generates an interactive enrichment plot with a custom legend
+    based on Gene_set from a pandas DataFrame.
+
+    Args:
+      df: A pandas DataFrame containing enrichment data with columns:
+        'Gene_set': Gene set category
+        'Term': The specific term enriched
+        'P-value': The p-value for the enrichment
+        'Genes': A semicolon-separated string of enriched genes
+
+    Returns:
+      A plotly Figure object.
+    """
+    df["-log10(P-value)"] = -df["P-value"].apply(lambda p: p if p == 0 else np.log10(p))
+
+    # Map each Gene_set to a unique color
+    gene_sets = df["Gene_set"].unique()
+    gene_set_colors = {
+        gene_set: color
+        for gene_set, color in zip(
+            gene_sets, plotly.colors.qualitative.Plotly
+        )
+    }
+
+    # Create the bar chart
+    fig = go.Figure(
+        go.Bar(
+            y=df["Term"],
+            x=df["-log10(P-value)"],
+            orientation="h",
+            marker=dict(color=df["Gene_set"].map(gene_set_colors)),
+            hovertemplate=(
+                "<b>Term:</b> %{y}<br>"
+                "<b>Gene Set:</b> %{customdata[0]}<br>"
+                "<b>-log10(P-value):</b> %{x:.2f}<br>"
+                "<b>Genes:</b> %{customdata[1]}<extra></extra>"
+            ),
+            customdata=df[["Gene_set", "Genes"]].values,
+            showlegend=False,  # Don't show default legend
+        )
+    )
+    # Add custom legend entries as dummy scatter traces
+    for gene_set, color in gene_set_colors.items():
+      fig.add_trace(go.Scatter(
+          x=[None],
+          y=[None],
+          mode='markers',
+          marker=dict(color=color, size=10),
+          name=gene_set,
+          showlegend=True # Show the legend
+      ))
+
+
+    fig.update_layout(
+        title="Enrichment Results",
+        yaxis_title="Enriched Term",
+        xaxis_title="-log10(P-value)",
+        hovermode="closest",
+        legend=dict(
+            title="Gene Sets",
+             orientation="h", # Horizontal legend
+            yanchor="bottom",
+            y=1.02,
+            xanchor="right",
+            x=1
+           )
+    )
+
+    return fig
 
 def df_from_uniprots(df,uniprots):
     """Create a DataFrame from a list of UniProt IDs."""
     return df[df['UniProtKB-AC'].isin(uniprots)].reset_index(drop=True)
 # Function to perform enrichment analysis
+@st.cache_data
 def perform_enrichment(gene_list, background_list, libraries):
     """Performs enrichment analysis using gseapy."""
 
@@ -110,19 +187,6 @@ def main():
         with st.spinner("Running enrichment analysis..."):
             results_df = perform_enrichment(list(selected_gene_list), background_list, selected_libraries)
 
-        if results_df is not None and not results_df.empty:
-            st.success("Enrichment analysis completed!")
-            st.subheader("Enrichment Results")
-            st.dataframe(results_df)
-
-            # download button for results
-            csv = results_df.to_csv(index=False).encode('utf-8')
-            st.download_button(label="Download CSV",
-                               data=csv,
-                               file_name='enrichr_results.csv',
-                               mime='text/csv')
-        else:
-            st.error("No results obtained or an error occurred during analysis.")
 
         if results_df is not None and not results_df.empty:
             st.session_state['enrichment_results_enrichr'] = results_df  # Save results in session state
@@ -136,11 +200,13 @@ def main():
         st.dataframe(st.session_state['enrichment_results_enrichr'])
 
         # Download button for results
-        csv = st.session_state['enrichment_results'].to_csv(index=False).encode('utf-8')
+        csv = st.session_state['enrichment_results_enrichr'].to_csv(index=False).encode('utf-8')
         st.download_button(label="Download CSV",
                            data=csv,
                            file_name='enrichr_results.csv',
                            mime='text/csv')
+        fig=create_enrichment_plot(st.session_state['enrichment_results_enrichr'])
+        st.plotly_chart(fig)
     else:
         st.info("No enrichment results to display. Run a new analysis to see results.")
 
