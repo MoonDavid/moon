@@ -13,3 +13,4 @@ pyvis
 scipy
 statsmodels
 spacy
+gseapy
