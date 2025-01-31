@@ -1637,7 +1637,7 @@ def main():
 
         st.subheader("Protein physicochemical features ")
         # Automatically run analysis without a button
-        with st.expander("See analysis Gemini"):
+        with st.expander("See analysis"):
             sequence_analysis(data)
 
         st.subheader("RNA binding proteins")
