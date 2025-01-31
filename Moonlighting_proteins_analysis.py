@@ -1648,6 +1648,10 @@ def main():
         with st.expander("See analysis"):
             disorder_analysis(data, selected_df_name)
 
+        st.subheader("Protein domain")
+        with st.expander("See analysis"):
+            interpro_analysis(data, selected_df_name)
+
 
 if __name__ == "__main__":
     main()
