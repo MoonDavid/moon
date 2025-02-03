@@ -11,12 +11,13 @@ from Bio.SeqUtils.ProtParam import ProteinAnalysis
 from matplotlib_venn import venn3
 from pygments.lexer import default
 from Bio.SeqUtils.ProtParam import ProteinAnalysis
-from scipy.stats import hypergeom
+from scipy.stats import hypergeom, binomtest
 from statsmodels.stats.multitest import multipletests
 import altair as alt
 import json
 import plotly.express as px
 import plotly.graph_objects as go
+
 
 
 # =======================
@@ -1525,6 +1526,85 @@ def disorder_analysis(data: pd.DataFrame, selected_df_name: str):
         st.plotly_chart(fig, use_container_width=True)
 
 
+def disease(data: pd.DataFrame, selected_df_name: str):
+    # --- Title & Introduction ---
+    st.markdown("### Disease Association Analysis")
+
+    # removed the expander
+    st.markdown("#### About OMIM/MIM")
+    st.write(
+        """
+        **OMIM (Online Mendelian Inheritance in Man)** is a comprehensive, authoritative compendium of human genes and genetic phenotypes.
+        The database is continuously updated with information on all known Mendelian disorders and the genes involved in their expression.
+        """
+    )
+    # --- Check for mim_morbid_accession column ---
+    if 'mim_morbid_accession' not in data.columns:
+        st.error("The column 'mim_morbid_accession' was not found in the provided dataframe.")
+        return
+    disease_protein_count = data['mim_morbid_accession'].notna().sum()
+
+    # --- Constants and Calculations ---
+    total_proteins = 21792
+    disease_genes_total = 5310
+    enrichment_percentage = (disease_genes_total / total_proteins) * 100
+    sample_size = len(data)
+    dataset_disease_percentage = (disease_protein_count / sample_size) * 100 if sample_size > 0 else 0
+
+    # --- Display Enrichment Info ---
+    st.markdown("#### Enrichment Overview")
+    col1, col2 = st.columns(2)
+    with col1:
+        st.metric("OMIM-associated proteins", f"{disease_genes_total} / {total_proteins}",
+                  f"{enrichment_percentage:.2f}%")
+    with col2:
+        st.metric(f"Proteins with disease links in {selected_df_name}", f"{disease_protein_count} / {sample_size}",
+                  f"{dataset_disease_percentage:.2f}%")
+
+    # --- Hypergeometric Test ---
+    st.markdown("#### Hypergeometric Test")
+    M = total_proteins  # Population size
+    N = sample_size  # Sample size (proteins in the selected dataset)
+    K = disease_genes_total  # Disease-associated proteins in UniProtKB
+    k = disease_protein_count  # Disease-associated proteins in selected dataset
+    p_value_hypergeo = hypergeom.sf(k - 1, M, K, N)
+    st.write(f"**P-value:** {p_value_hypergeo:.4e}")
+    if p_value_hypergeo < 0.05:
+        st.success(
+            "The observed proportion of disease-associated proteins in the dataset is significantly enriched compared to UniProtKB (p < 0.05).")
+    else:
+        st.warning(
+            "The observed proportion of disease-associated proteins in the dataset is not significantly different from UniProtKB (p ≥ 0.05).")
+
+    # --- Binomial Test ---
+    st.markdown("#### Binomial Test")
+    baseline_probability = disease_genes_total / total_proteins
+    binom_result = binomtest(disease_protein_count, n=sample_size, p=baseline_probability, alternative='two-sided')
+    p_value_binomial = binom_result.pvalue
+    st.write(f"**P-value:** {p_value_binomial:.4e}")
+    if p_value_binomial < 0.05:
+        st.success(
+            "The observed proportion of disease-associated proteins in the dataset significantly deviates from the expected proportion (p < 0.05).")
+    else:
+        st.warning(
+            "The observed proportion of disease-associated proteins in the dataset is not significantly different from the expected proportion (p ≥ 0.05).")
+
+    # --- Plot ---
+    st.markdown("#### Visualization")
+
+    # Prepare data for the bar chart
+    labels = ['UniProtKB with Disease Association', f'{selected_df_name} with Disease Association']
+    values = [enrichment_percentage, dataset_disease_percentage]
+
+    # Create a bar chart using Plotly
+    fig = go.Figure(data=[go.Bar(x=labels, y=values, marker_color=['#3498db', '#e74c3c'])])
+    fig.update_layout(
+        title_text=f'Disease Association Proportion',
+        yaxis_title='Percentage',
+        yaxis=dict(range=[0, max(values) + 5]),  # Add buffer to Y axis
+        xaxis_title='Dataset'
+    )
+    st.plotly_chart(fig)
 # =======================
 # Main Function
 # =======================
@@ -1539,7 +1619,7 @@ def main():
     st.title("Moonlighting Proteins Analysis")
 
     # Load data
-    df = load_data('moonhuman.csv')  # Update with your actual file path
+    df = load_data('moonhuman_mim.csv')  # Update with your actual file path
     if 'df' not in st.session_state:
         st.session_state['df'] = df
     st.write(
@@ -1589,7 +1669,6 @@ def main():
             "Select a DataFrame for successive analysis:",
             df_names,
             key='selected_df',
-            index=st.session_state['index']
         )
 
         remove_unreviewed = st.checkbox("Remove unreviewed proteins")
@@ -1597,9 +1676,9 @@ def main():
         # Submit button
         submitted = st.form_submit_button("Submit")
 
-        if submitted:
-            # Update session state with the selected DataFrame name
-            st.session_state['index'] = df_names.index(selected_df_name) if selected_df_name in df_names else 0
+    if submitted:
+        # Update session state with the selected DataFrame name
+        st.session_state['index'] = df_names.index(selected_df_name) if selected_df_name in df_names else 0
 
 
 
@@ -1647,6 +1726,10 @@ def main():
         st.subheader("Intrinsically disordered regions and proteins")
         with st.expander("See analysis"):
             disorder_analysis(data, selected_df_name)
+
+        st.subheader("Diseases")
+        with st.expander("See analysis"):
+            disease(data, selected_df_name)
 
 
 if __name__ == "__main__":

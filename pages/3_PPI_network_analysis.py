@@ -176,217 +176,13 @@ def calculate_centralities(G: nx.Graph) -> pd.DataFrame:
     return centrality_df
 
 
-def create_pyvis_network2(
-    G: nx.Graph,
-    physics_enabled: bool,
-    node_size: int,
-    edge_width: int,
-    color_scheme: str,
-    weight_col
-) -> Network:
-    """
-    Build a PyVis Network visualization from a NetworkX graph.
-
-    :param G: NetworkX Graph to visualize
-    :param physics_enabled: Whether to enable physics simulation
-    :param node_size: Size of the nodes
-    :param edge_width: Width of the edges
-    :param color_scheme: Visualization color scheme
-    :return: PyVis Network object
-    """
-
-
-    # Configure physics
-    nt = Network(
-        height="600px",
-        width="100%",
-        bgcolor="#ffffff",
-        font_color="black"
-    )
-    nt.repulsion()
-
-    # Configure physics
-    nt.toggle_physics(physics_enabled)
-
-    # Add nodes and edges with custom styling
-    if color_scheme == "Degree-based":
-        degree_dict = dict(G.degree())
-        max_degree = max(degree_dict.values())
-        for node in G.nodes():
-            node_color = f"#{int((degree_dict[node] / max_degree) * 255):02x}0000"
-            nt.add_node(node, label=node, size=node_size, color=node_color)
-    elif color_scheme == "Community-based":
-        communities = nx.community.greedy_modularity_communities(G)
-        color_map = plt.cm.get_cmap('Set3')(np.linspace(0, 1, len(communities)))
-        node_colors = {}
-        for i, comm in enumerate(communities):
-            for node in comm:
-                rgb = color_map[i][:3]
-                node_colors[node] = f"#{int(rgb[0] * 255):02x}{int(rgb[1] * 255):02x}{int(rgb[2] * 255):02x}"
-        for node in G.nodes():
-            nt.add_node(node, label=node, size=node_size, color=node_colors.get(node, "#97C2FC"))
-    else:
-        for node in G.nodes():
-            nt.add_node(node, label=node, size=node_size)
-
-    # Add edges with weights
-    for edge in G.edges(data=True):
-        weight = edge[2].get(weight_col, 1)
-        nt.add_edge(edge[0], edge[1], value=weight, width=edge_width)
-
-    # Set other visualization options
-    nt.set_options("""
-    var options = {
-      "nodes": {
-        "font": {"size": 12}
-      },
-      "edges": {
-        "smooth": false
-      },
-      "physics": {
-        "barnesHut": {
-          "gravitationalConstant": -5000,
-          "springLength": 95
-        },
-        "minVelocity": 0.75,
-        "stabilization": {
-          "iterations": 200
-        }
-      }
-    }
-    """)
-
-    return nt
-def create_pyvis_network_claude(
-    G: nx.Graph,
-    physics_enabled: bool,
-    node_size: int,
-    edge_width: int,
-    color_scheme: str,
-    weight_col: str
-) -> Network:
-    """
-    Build a PyVis Network visualization from a NetworkX graph with improved stabilization.
-
-    :param G: NetworkX Graph to visualize
-    :param physics_enabled: Whether to enable physics simulation
-    :param node_size: Size of the nodes
-    :param edge_width: Width of the edges
-    :param color_scheme: Visualization color scheme
-    :param weight_col: Which column in edge_attr to treat as weight
-    :return: PyVis Network object
-    """
-    nt = Network(
-        height="600px",
-        width="100%",
-        bgcolor="#ffffff",
-        font_color="black",
-        notebook=False
-    )
-
-    # Disable physics by default - we'll only use it for initial layout
-    nt.toggle_physics(False)
-
-    # More conservative repulsion settings to prevent 'exploding'
-    nt.repulsion(
-        node_distance=100,      # Reduced from 120
-        central_gravity=0.5,    # Increased from 0.2 for more centralization
-        spring_length=100,      # Reduced from 150
-        spring_strength=0.15,   # Increased from 0.05 for more stability
-        damping=0.95           # Increased from 0.09 for more dampening
-    )
-
-    # Color scheme implementation remains the same
-    if color_scheme == "Degree-based":
-        degree_dict = dict(G.degree())
-        max_degree = max(degree_dict.values()) if degree_dict else 1
-        for node in G.nodes():
-            deg_val = int((degree_dict[node] / max_degree) * 255)
-            node_color = f"#{deg_val:02x}0000"
-            nt.add_node(node, label=node, size=node_size, color=node_color)
-    elif color_scheme == "Community-based":
-        from networkx.algorithms import community
-        communities = community.greedy_modularity_communities(G)
-        color_map = plt.cm.get_cmap("Set3")(np.linspace(0, 1, len(communities)))
-        node_colors = {}
-        for i, comm in enumerate(communities):
-            rgb = color_map[i][:3]
-            color_hex = "#{:02x}{:02x}{:02x}".format(
-                int(rgb[0]*255), int(rgb[1]*255), int(rgb[2]*255)
-            )
-            for node in comm:
-                node_colors[node] = color_hex
-        for node in G.nodes():
-            color = node_colors.get(node, "#97C2FC")
-            nt.add_node(node, label=node, size=node_size, color=color)
-    else:
-        for node in G.nodes():
-            nt.add_node(node, label=node, size=node_size)
-
-    # Add edges
-    for edge in G.edges(data=True):
-        weight = edge[2].get(weight_col, 1)
-        nt.add_edge(edge[0], edge[1], value=weight, width=edge_width)
-
-    # Updated physics and stabilization options
-    nt.set_options("""
-    var options = {
-      "nodes": {
-        "font": {"size": 12},
-        "fixed": {
-          "x": false,
-          "y": false
-        }
-      },
-      "edges": {
-        "smooth": {
-          "type": "continuous",
-          "forceDirection": "none"
-        }
-      },
-      "physics": {
-        "enabled": false,
-        "solver": "forceAtlas2Based",
-        "forceAtlas2Based": {
-          "gravitationalConstant": -50,
-          "centralGravity": 0.01,
-          "springLength": 100,
-          "springConstant": 0.08,
-          "damping": 0.95,
-          "avoidOverlap": 1
-        },
-        "stabilization": {
-          "enabled": true,
-          "iterations": 1000,
-          "updateInterval": 25,
-          "onlyDynamicEdges": false,
-          "fit": true
-        },
-        "minVelocity": 0.75,
-        "maxVelocity": 30
-      },
-      "interaction": {
-        "navigationButtons": true,
-        "keyboard": true,
-        "dragNodes": true,
-        "dragView": true,
-        "zoomView": true
-      }
-    }
-    """)
-
-    # Only enable physics if explicitly requested
-    if physics_enabled:
-        nt.toggle_physics(True)
-
-    return nt
 def create_pyvis_network(
     G: nx.Graph,
     physics_enabled: bool,
     node_size: int,
     edge_width: int,
     color_scheme: str,
-    weight_col: str
+    weight_col=None
 ) -> Network:
     """
     Build a PyVis Network visualization from a NetworkX graph.
@@ -460,7 +256,8 @@ def create_pyvis_network(
 
     # Add edges
     for edge in G.edges(data=True):
-        weight = edge[2].get(weight_col, 1)
+        if weight_col:
+            weight = edge[2].get(weight_col, 1)
         nt.add_edge(edge[0], edge[1], width=edge_width)
 
     # Provide advanced config for physics/stabilization
@@ -521,7 +318,106 @@ def render_pyvis_network(nt: Network):
 # =========================================================
 #                 UI LOGIC FUNCTIONS
 # =========================================================
-def show_interactions_ui(species: int, limit: int):
+def show_intact_interactions_ui():
+    """
+    UI and logic for retrieving and visualizing protein-protein interactions using IntAct data,
+    filtered by source or target against a selected gene list.
+    """
+    st.header("📂 IntAct Protein-Protein Interactions Explorer")
+
+    # Preloaded gene lists from session state
+    available_gene_lists = {
+        key: value for key, value in st.session_state.items() if isinstance(value, list)
+    }
+
+    if not available_gene_lists:
+        st.warning("No pre-loaded gene lists found in session state. Please add some.")
+        return
+
+    # Pick a gene list to filter interactions
+    sorted_gene_list_keys = list(available_gene_lists.keys())
+    with st.form("gene_list_form"):
+        # Add the selectbox inside the form
+        selected_gene_list = st.selectbox(
+            "Select the gene list to filter interactions:",
+            options=sorted_gene_list_keys,
+        )
+        submit_button = st.form_submit_button("Submit")
+
+    if not submit_button:
+        return
+
+    selected_genes = available_gene_lists[selected_gene_list]
+    st.write(f"**Selected Gene List:** {selected_gene_list}")
+    st.write(f"**Protein IDs in Gene List:** {', '.join(selected_genes)}")
+
+    # File Processing
+    filepath = "/home/davide/PycharmProjects/moonlight/lib/intact_human.csv"
+    try:
+        with st.spinner("⏳ Loading and filtering IntAct data... Please wait while we filter and process the interactions."):
+            df = pd.read_csv(filepath)
+            st.write(f"**Number of total human moonlighting protein Interactions in IntAct:** {len(df)}")
+        # Filter interactions
+
+            filtered_df = df[
+                df["#ID(s) interactor A"].isin(selected_genes) |
+                df["ID(s) interactor B"].isin(selected_genes)
+                ]
+            st.write(f"**Filtered Interactions:** {len(filtered_df)} entries found.")
+            st.dataframe(filtered_df.head(10))
+
+        if filtered_df.empty:
+            st.warning("No interactions found for the selected gene list.")
+            return
+
+        # Network Creation
+        key=f"G_IntAct_{selected_gene_list}"
+        st.session_state[key] = nx.from_pandas_edgelist(
+            filtered_df,
+            source="#ID(s) interactor A",
+            target="ID(s) interactor B",
+            edge_attr=None,  # Add additional edge attributes if available
+            create_using=nx.Graph()
+        )
+
+        # Display network-related stats and visualizations
+        if key in st.session_state:
+            G = st.session_state[key]
+
+            # Display basic network statistics
+            density = nx.density(G)
+            st.write(f"**Network Density:** {density:.4f}")
+
+            # Calculate centralities and display statistics
+            centrality_df = calculate_centralities(G)
+            st.dataframe(centrality_df)
+
+            # Display top nodes by degree centrality
+            top_degree = centrality_df["Degree"].sort_values(ascending=False).head(5).index.tolist()
+            st.write(f"**Top 5 Nodes by Degree Centrality:** {', '.join(top_degree)}")
+
+            # Matplotlib-based graph visualization
+            st.subheader("Networkx Visualization")
+            plt.figure(figsize=(10, 6))
+            nx.draw(G,
+                    with_labels=False,
+                    node_color='lightblue',
+                    edge_color='gray',
+                    node_size=100,
+                    font_size=8,
+                    font_weight='bold')
+            st.pyplot(plt)
+
+            # PyVis-based interactive graph visualization
+            st.subheader("Pyvis Interactive Network Visualization")
+            nt = create_pyvis_network(G)
+            render_pyvis_network(nt)
+
+    except FileNotFoundError:
+        st.error(f"File '{filepath}' not found. Please ensure it exists.")
+    except Exception as e:
+        st.error(f"An error occurred: {e}")
+def show_string_interactions_ui():
     """
     UI and logic for retrieving and visualizing protein-protein interactions.
     """
@@ -544,24 +440,27 @@ def show_interactions_ui(species: int, limit: int):
             "Select the gene list to convert:",
             options=sorted_gene_list_keys,
         )
-
+        species = st.text_input("Species NCBI ID", value="9606", help="Default is 9606 for Homo sapiens.")
+        limit = st.number_input("Result Limit (STRING only)", min_value=1, max_value=1000, value=10, step=1)
+        required_score = st.slider(
+            "Required Score",
+            min_value=0,
+            max_value=1000,
+            value=400,
+            step=50,
+            help="Minimum required score for interactions."
+        )
         # Add a submit button
         submit_button = st.form_submit_button("Submit")
 
-    proteins = ','.join(available_gene_lists[selected_gene_list])
 
-    # Sidebar parameters
-    required_score = st.sidebar.slider(
-        "Required Score",
-        min_value=0,
-        max_value=1000,
-        value=400,
-        step=50,
-        help="Minimum required score for interactions."
-    )
+    # Sidebar parametersshow_string_interactions_ui()
 
     if submit_button:
+        species = int(species) if species else 9606
+        proteins = ','.join(available_gene_lists[selected_gene_list])
         st.write(f"Selected gene list: {selected_gene_list}")
+        st.write(f"Protein IDs: {proteins}")
         if proteins:
             try:
                 with st.spinner("Fetching interactions..."):
@@ -702,35 +601,149 @@ def show_enrichment_ui(species: int):
 #                        MAIN APP
 # =========================================================
 def main():
-    st.title("🔗 STRING Database API Explorer")
+    st.title("🔗 Protein-Protein Interactions Explorer")
     st.markdown("""
-    This application allows you to interact with the [STRING database](https://string-db.org/) 
-    using the STRING API. You can map external protein identifiers to STRING IDs, retrieve 
-    protein-protein interactions, get detailed protein information, and perform enrichment analysis.
+    This application allows you to explore protein-protein interaction data using different sources 
+    (STRING, IntAct, or BioGRID). Depending on your choice, you can view and analyze interaction networks.
     """)
 
-    # Sidebar for user inputs
-    st.sidebar.header("Input Parameters")
-
-    # Select API method
-    api_method = st.sidebar.selectbox(
-        "Choose API Method",
-        ("Get Protein-Protein Interactions", "Get Protein Information", "Enrichment Analysis")
+    # Sidebar for database selection
+    st.sidebar.header("Choose Source Database")
+    database_option = st.sidebar.selectbox(
+        "Select Database",
+        ("STRING", "IntAct", "BioGRID","APID")
     )
 
-    # Common parameters
-    species = st.sidebar.text_input("Species NCBI ID", value="9606", help="Default is 9606 for Homo sapiens.")
-    limit = st.sidebar.number_input("Result Limit", min_value=1, max_value=1000, value=10, step=1)
+    # Sidebar for common parameters
+    st.sidebar.header("Input Parameters")
 
-    species = int(species)
+    if database_option == "STRING":
+        st.subheader("STRING Database Selected")
+        st.text("Use the STRING API to retrieve protein-protein interactions.")
 
-    # Route to appropriate UI function
-    if api_method == "Get Protein-Protein Interactions":
-        show_interactions_ui(species, limit)
+        # Call function for STRING interactions
+        show_string_interactions_ui()
 
-    elif api_method == "Get Protein Information":
-        show_protein_info_ui(species)
-    else:  # "Enrichment Analysis"
-        show_enrichment_ui(species)
+    elif database_option == "IntAct":
+        st.subheader("IntAct Database Selected")
+        st.text("Load protein-protein interaction data from intacthuman.csv.")
+
+        # Call function for IntAct interactions
+        show_intact_interactions_ui()
+
+    elif database_option == "BioGRID":
+        st.subheader("BioGRID Database Selected")
+        st.warning("BioGRID data processing is under development.  Stay tuned for future updates!")
+        # TODO: Implement BioGRID functionality in the future
+
+
+    elif database_option == "APID":
+        st.subheader("APID Database Selected")
+        st.info("Select a gene list and quality filter to analyze APID interactions.")
+
+        # Check if session has pre-loaded gene lists
+        available_gene_lists = {
+            key: value for key, value in st.session_state.items() if isinstance(value, list)
+        }
+
+        if not available_gene_lists:
+            st.warning("No pre-loaded gene lists found in session state. Please upload gene lists.")
+        else:
+            with st.form("apid_form"):
+                # Select gene list
+                selected_gene_list = st.selectbox(
+                    "Select Gene List",
+                    options=list(available_gene_lists.keys())
+                )
+
+                # Choose quality filter
+                quality_filter = st.selectbox(
+                    "Select Quality Filter",
+                    ("Level 1: Interactions proven by 2 or more experimental evidences",
+                     "Level 2: Interactions proven by at least 1 binary method (binary interactomes)")
+                )
+
+                submit_button = st.form_submit_button("Submit")
+
+            if submit_button:
+                selected_genes = available_gene_lists[selected_gene_list]
+
+                # Determine the TSV file to read based on the selected quality filter
+                file_to_read = "9606_Q1.txt" if "Level 1" in quality_filter else "9606_Q2.txt"
+                st.write(f"Reading data from: **{file_to_read}**")
+
+                try:
+                    # Load the TSV file
+                    with st.spinner(f"Loading data from {file_to_read}..."):
+                        apid_data = pd.read_csv(file_to_read, sep="\t")
+
+                    # Filter the data based on the selected gene list and UniprotIDs
+                    st.write("Filtering interactions based on your gene list...")
+                    filtered_data = apid_data[
+                        (apid_data["UniprotID_A"].isin(selected_genes)) |
+                        (apid_data["UniprotID_B"].isin(selected_genes))
+                        ]
+
+                    # Display results
+                    st.write(f"**Filtered Interactions:** {len(filtered_data)} entries found.")
+                    st.dataframe(filtered_data)
+
+                    if not filtered_data.empty:
+                        # Network visualization
+                        st.subheader("Network Visualization")
+                        G = nx.from_pandas_edgelist(
+                            filtered_data,
+                            source="UniprotID_A",
+                            target="UniprotID_B",
+                            edge_attr=None,  # Add additional edge attributes if needed
+                            create_using=nx.Graph()
+                        )
+
+                        # Display basic network stats
+                        st.write(f"**Number of Nodes:** {G.number_of_nodes()}")
+                        st.write(f"**Number of Edges:** {G.number_of_edges()}")
+                        st.write(f"**Network Density:** {nx.density(G):.4f}")
+
+                        # Optional visualization
+                        plt.figure(figsize=(10, 6))
+                        nx.draw(
+                            G,
+                            with_labels=True,
+                            node_color="lightblue",
+                            edge_color="gray",
+                            node_size=500,
+                            font_size=10
+                        )
+                        st.pyplot(plt)
+                        st.subheader("Pyvis Interactive Network Visualization")
+
+                        st.subheader("Network Visualization Options")
+                        physics_enabled = st.checkbox("Enable Physics", value=False)
+                        node_size = st.slider("Node Size", min_value=10, max_value=50, value=20)
+                        col1, col2 = st.columns(2)
+                        with col1:
+                            edge_width = st.slider("Edge Width", min_value=1, max_value=10, value=2)
+                        with col2:
+                            color_scheme = st.selectbox(
+                                "Color Scheme",
+                                options=["Default", "Degree-based", "Community-based"]
+                            )
+                        nt = create_pyvis_network(
+                            G,
+                            physics_enabled=physics_enabled,
+                            node_size=node_size,
+                            edge_width=edge_width,
+                            color_scheme=color_scheme
+                        )
+
+                        render_pyvis_network(nt)
+
+                except FileNotFoundError:
+                    st.error(f"File '{file_to_read}' not found. Please ensure it exists in the directory.")
+                except Exception as e:
+                    st.error(f"An error occurred: {e}")
+
+
+
 if __name__ == "__main__":
     main()
