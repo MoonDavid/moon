@@ -1293,7 +1293,7 @@ def interpro_analysis(data: pd.DataFrame, selected_df_name):
             st.success(f"Associated UniProtKB-AC IDs saved to session state with key: {session_key}")
     st.write("### Enrichment of InterPro domains:")
     #read dict from domain_dict.json
-    domain_dict = json.load(open("domain_dict.json", "r"))
+    domain_dict = json.load(open("data/domain_dict.json", "r"))
     #delete all keys that starts with DP
     domain_dict = {k: v for k, v in domain_dict.items() if not k.startswith("DP")}
     results_df=enrichment_analysis(dict=domain_dict, query_uniprots=df_to_uniprots(data), correction='fdr_bh')
@@ -1415,7 +1415,7 @@ def disorder_analysis(data: pd.DataFrame, selected_df_name: str):
         'alphadb_disorder',
         'mobidblite_disorder'
     ]
-    idp_dict = json.load(open("IDP_ontology.json", "r"))
+    idp_dict = json.load(open("data/IDP_ontology.json", "r"))
     # delete all keys that starts with DP
     idp_dict = {k: v for k, v in idp_dict.items() if not k.startswith("DP")}
     results_df = enrichment_analysis(dict=idp_dict, query_uniprots=df_to_uniprots(data), correction='fdr_bh')
@@ -1616,10 +1616,10 @@ def main():
         initial_sidebar_state="expanded"
     )
 
-    st.title("Moonlighting Proteins Analysis")
+    st.title("🌙 Moonlighting Proteins Analysis")
 
     # Load data
-    df = load_data('moonhuman_mim.csv')  # Update with your actual file path
+    df = load_data('data/moonhuman_mim.csv')  # Update with your actual file path
     if 'df' not in st.session_state:
         st.session_state['df'] = df
     st.write(
@@ -1657,11 +1657,7 @@ def main():
 
     df_names=sorted(get_lists_from_session())
 
-    def on_change():
-        st.session_state['index'] = df_names.index(st.session_state.selected_df)
 
-    if 'index' not in st.session_state:
-        st.session_state['index'] = None
 
         # Define the form
     with st.form("data_selection_form"):
@@ -1676,14 +1672,8 @@ def main():
         # Submit button
         submitted = st.form_submit_button("Submit")
 
-    if submitted:
-        # Update session state with the selected DataFrame name
-        st.session_state['index'] = df_names.index(selected_df_name) if selected_df_name in df_names else 0
 
-
-
-    # Use the stored selections if available
-    if selected_df_name in st.session_state:
+    if submitted or selected_df_name in st.session_state:
         selected_df_uniprots = st.session_state[selected_df_name]
         data = df_from_uniprots(df, selected_df_uniprots)
 

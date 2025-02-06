@@ -135,7 +135,6 @@ def run_gprofiler_profile():
                     color='log_p_value',  # Use log_p_value for color mapping
                     color_continuous_scale='Viridis',  # Choose a color scale that represents magnitude effectively
                     labels={
-                        'log_p_value': '-Log10(P-Value)',
                         'name': 'GO Term',
                         'log_p_value': '-Log10(P-Value)'
                     },
@@ -180,8 +179,7 @@ def run_gprofiler_profile():
                 color_continuous_scale='Viridis',  # Choose a color scale that represents magnitude effectively
                 labels={
                     'log_p_value': '-Log10(P-Value)',
-                    'name': 'GO Term',
-                    'log_p_value': '-Log10(P-Value)'
+                    'name': 'GO Term'
                 },
                 title=f'Top {top_n} Enriched GO Terms by P-Value',
                 hover_data={
