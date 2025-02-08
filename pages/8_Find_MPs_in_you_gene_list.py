@@ -8,7 +8,7 @@ from venny4py.venny4py import *
 
 # Retrieve session_state items (make sure these are set somewhere in your app)
 DF = st.session_state.get('df', None)
-HUMANMPs_all = st.session_state.get('humanMPs_all', None)
+HUMANMPs_all = st.session_state['gene_lists'].get('humanMPs_all', None)
 
 
 def df_from_uniprots(df, uniprots):

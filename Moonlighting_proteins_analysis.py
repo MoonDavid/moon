@@ -107,7 +107,7 @@ def enrichment_analysis(query_uniprots, dict, correction='fdr_bh'):
 def get_lists_from_session():
     """Retrieve keys from session_state that contain list objects."""
     lists = []
-    for key, value in st.session_state.items():
+    for key, value in st.session_state['gene_lists'].items():
         if isinstance(value, list):
             lists.append(key)
     return lists
@@ -170,20 +170,17 @@ def filter_proteins(data: pd.DataFrame) -> pd.DataFrame:
         # 1. Intersection of MoonProt and MultiTaskProtDB (Most Restrictive)
         intersection_set = sets_dict["MoonProt"].intersection(sets_dict["MultiTaskProtDB"])
         intersection_key = "humanMPs(MoonProt AND MultiTaskProtDB)"
-        st.session_state[intersection_key] = list(intersection_set)
-        #st.session_state["humanMPs(MoonProt AND MultiTaskProtDB)"] = data[data['UniProtKB-AC'].isin(intersection_set)].reset_index(drop=True)
+        st.session_state['gene_lists'][intersection_key] = list(intersection_set)
 
         # 2. Union of MoonProt and MultiTaskProtDB
         union_two_set = sets_dict["MoonProt"].union(sets_dict["MultiTaskProtDB"])
         union_two_key = "humanMPs(MoonProt OR MultiTaskProtDB)"
-        st.session_state[union_two_key] = list(union_two_set)
-        #st.session_state["humanMPs(MoonProt OR MultiTaskProtDB)"] = data[data['UniProtKB-AC'].isin(union_two_set)].reset_index(drop=True)
+        st.session_state['gene_lists'][union_two_key] = list(union_two_set)
 
         # 3. Union of all three databases (Least Restrictive)
         union_all_set = sets_dict["MoonDB"].union(sets_dict["MoonProt"]).union(sets_dict["MultiTaskProtDB"])
         union_all_key = "humanMPs_all"
-        st.session_state[union_all_key] = list(union_all_set)
-        #st.session_state["humanMPs(MoonDB OR MoonProt OR MultiTaskProtDB)"] = data[data['UniProtKB-AC'].isin(union_all_set)].reset_index(drop=True)
+        st.session_state['gene_lists'][union_all_key] = list(union_all_set)
 
         # Mark that default filters have been initialized
         st.session_state['default_filters_initialized'] = True
@@ -243,8 +240,7 @@ def filter_proteins(data: pd.DataFrame) -> pd.DataFrame:
         #session_key2 = f"humanMPs({operation_str.join(db_names)})"
 
         # Store the filtered UniProtKB-AC list in session state
-        st.session_state[session_key] = filtered_data['UniProtKB-AC'].tolist()
-        #st.session_state[session_key2] = filtered_data
+        st.session_state['gene_lists'][session_key] = filtered_data['UniProtKB-AC'].tolist()
 
         # Display results
         st.write(f"Number of filtered proteins: {filtered_data.shape[0]}")
@@ -337,14 +333,14 @@ def display_categorical_feature(data: pd.DataFrame, column: str, selected_df_nam
             filtered_df = count_df.iloc[selected_rows]  # Filter dataframe
             selected_values = filtered_df[column].tolist()
             # Print in Streamlit
-            st.write(f"Selected values: {selected_values}")
+            #st.write(f"Selected values: {selected_values}")
             selected_uniprot_ids = data[
                 data[column].apply(lambda x: any(val in str(x).split("; ") for val in selected_values))
             ]["UniProtKB-AC"].dropna().unique().tolist()
 
-            st.write(f"Associated UniProtKB-AC IDs: {selected_uniprot_ids}")
+            #st.write(f"Associated UniProtKB-AC IDs: {selected_uniprot_ids}")
             session_key = f"{selected_df_name}-{column}:{selected_values}"
-            st.session_state[session_key] = selected_uniprot_ids
+            st.session_state['gene_lists'][session_key] = selected_uniprot_ids
             st.success(f"Saved in session state with key `{session_key}`.")
 
 
@@ -417,9 +413,8 @@ def display_categorical_feature(data: pd.DataFrame, column: str, selected_df_nam
                 selected_uniprot_ids.extend(find_uniprots_by_go_pair(uniprot_to_go_pairs, pair))
 
             selected_uniprot_ids = list(set(selected_uniprot_ids))  # Remove duplicates
-            st.write(f"Associated UniProtKB-AC IDs: {selected_uniprot_ids}")
             session_key = f"{selected_df_name}-{column}:{selected_pairs}"
-            st.session_state[session_key] = selected_uniprot_ids
+            st.session_state['gene_lists'][session_key] = selected_uniprot_ids
             st.success(f"Saved in session state with key `{session_key}`.")
 
 
@@ -1288,8 +1283,8 @@ def interpro_analysis(data: pd.DataFrame, selected_df_name):
         session_key = f"{selected_df_name}-{selected_values}"
         st.write(f"Selected values: {selected_values}")
         st.write(f"Associated UniProtKB-AC IDs: {uniprot_ids}")
-        if session_key not in st.session_state:
-            st.session_state[session_key] = uniprot_ids
+        if session_key not in st.session_state['gene_lists']:
+            st.session_state['gene_lists'][session_key] = uniprot_ids
             st.success(f"Associated UniProtKB-AC IDs saved to session state with key: {session_key}")
     st.write("### Enrichment of InterPro domains:")
     #read dict from domain_dict.json
@@ -1329,7 +1324,7 @@ def rna_binding_analysis(data: pd.DataFrame, selected_df_name):
     if st.button("Save to session state"):
         sessionkey = f"RBPs_{selected_df_name}"
         if sessionkey not in st.session_state:
-            st.session_state[sessionkey] = df_to_uniprots(datarbp)
+            st.session_state['gene_lists'][sessionkey] = df_to_uniprots(datarbp)
             st.success(f"RBPs saved to session state with key: {sessionkey}")
 
     # RBP Type Distribution
@@ -1622,6 +1617,8 @@ def main():
     df = load_data('data/moonhuman_mim.csv')  # Update with your actual file path
     if 'df' not in st.session_state:
         st.session_state['df'] = df
+    if 'gene_lists' not in st.session_state:
+        st.session_state['gene_lists'] = dict()
     st.write(
         "Questa app interattiva permette un'analisi dati esplorativa delle proteine moonlighting umane. "
         "Ogni tabella offre funzionalità di esportazione in formato CSV, ricerca di valori specifici e ordinamento delle colonne. "
@@ -1673,8 +1670,8 @@ def main():
         submitted = st.form_submit_button("Submit")
 
 
-    if submitted or selected_df_name in st.session_state:
-        selected_df_uniprots = st.session_state[selected_df_name]
+    if submitted or selected_df_name in st.session_state['gene_lists']:
+        selected_df_uniprots = st.session_state['gene_lists'][selected_df_name]
         data = df_from_uniprots(df, selected_df_uniprots)
 
         if remove_unreviewed:

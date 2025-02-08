@@ -30,28 +30,30 @@ def resource_expander(name, url=None, server=None, code=None, doi=None, descript
     - description (str): A brief description of the resource.
     - iframe (bool): Whether to attempt embedding the URL in an iframe (default is True).
     """
-    with st.expander(f"**{name}**"):
-        if url:
-            st.markdown(f"[Visit {name} database]({url})")
-        if server:
-            st.markdown(f"[Visit {name} server]({server})")
-        elif not url:
-            st.warning(f"No web server available for {name}")
-        if code:
-            st.markdown(f"[View {name} code repo]({code})")
-        if doi:
-            st.markdown(f"[Read {name} paper]({doi})")
+    st.markdown(f"### **{name}**")
+    if url:
+        st.markdown(f"[Visit {name} database]({url})")
+    if server:
+        st.markdown(f"[Visit {name} server]({server})")
+    elif not url:
+        st.warning(f"No web server available for {name}")
+    if code:
+        st.markdown(f"[View {name} code repo]({code})")
+    if doi:
+        st.markdown(f"[Read {name} paper]({doi})")
 
-        # Add resource description
-        if description:
-            st.markdown(f"**Description:** {description}")
+    # Add resource description
+    if description:
+        st.markdown(f"**Description:** {description}")
 
-        # Attempt to embed the URL in an iframe
-        if iframe:
+    # Attempt to embed the URL in an iframe
+    if iframe:
+        with st.expander(f"Embed {name}"):
             try:
                 components.iframe(url, height=600, scrolling=True)
             except Exception as e:
                 st.error(f"Could not embed {name} due to: {e}")
+    st.divider()
 
 
 def initialize_page() -> None:
@@ -198,7 +200,7 @@ def main():
         resource_expander(
             name="Pprint2",
             server="https://webs.iiitd.edu.in/raghava/pprint2/index.php",
-            code="https://github.com/raghava/pprint2",
+            code="https://github.com/raghavagps/pprint2",
             doi="10.1093/bib/bbac538",
             description=(
                 "Pprint2 is an improved version of Pprint designed for predicting RNA-interacting residues in a protein. "

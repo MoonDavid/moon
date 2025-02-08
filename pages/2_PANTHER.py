@@ -3,7 +3,7 @@ import requests
 import pandas as pd
 from urllib.parse import urlencode
 
-
+@st.cache_data
 def run_panther_analysis(
         gene_list: str,
         organism: str,
@@ -35,7 +35,7 @@ def run_panther_analysis(
     full_url = f"{PANTHER_ENDPOINT}?{query_string}"
 
     try:
-        response = requests.get(full_url, timeout=60)
+        response = requests.get(full_url)
         response.raise_for_status()
         data_json = response.json()
     except requests.exceptions.RequestException as e:
@@ -59,7 +59,7 @@ def panther_overrepresentation_analysis():
     """
     st.header("PANTHER Overrepresentation (GO Enrichment)")
 
-    available_gene_lists = {key: value for key, value in st.session_state.items() if isinstance(value, list)}
+    available_gene_lists = {key: value for key, value in st.session_state['gene_lists'].items() if isinstance(value, list)}
     if not available_gene_lists:
         st.warning("No gene list available in session state.")
         return
@@ -134,7 +134,8 @@ def panther_overrepresentation_analysis():
         submit_button = st.form_submit_button(label="Run PANTHER Enrichment")
 
     # Handle form submission
-    if submit_button:
+    if submit_button or "panther_results" in st.session_state:
+
         with st.spinner("Submitting request to PANTHER. Please wait..."):
             # Prepare the gene list as a comma-separated string
             gene_list_str = ', '.join(available_gene_lists[selected_gene_list])
@@ -154,10 +155,12 @@ def panther_overrepresentation_analysis():
             st.write(full_url)
         else:
             st.success("PANTHER Overrepresentation Analysis Completed!")
-            st.dataframe(results_df)
+            if "panther_results" not in st.session_state:
+                st.session_state["panther_results"] = results_df
+            st.dataframe(st.session_state["panther_results"])
 
             # Provide a download button for the results
-            csv_results = results_df.to_csv(index=False).encode('utf-8')
+            csv_results = st.session_state["panther_results"].to_csv(index=False).encode('utf-8')
             st.download_button(
                 label="Download Full Results as CSV",
                 data=csv_results,

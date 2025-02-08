@@ -8,7 +8,7 @@ import io
 
 def get_lists_from_session():
     """Retrieve keys from session_state that contain list objects."""
-    return [key for key, value in st.session_state.items() if isinstance(value, list)]
+    return [key for key, value in st.session_state['gene_lists'].items() if isinstance(value, list)]
 
 
 def df_from_uniprots(df, uniprots):
@@ -49,7 +49,7 @@ def handle_uniprot_id_list(diz, available_uniprot_lists):
         (",", ";", "|", "newline", "whitespace", "tab")
     )
 
-    identifier_list = st.session_state.get(selected_list, [])
+    identifier_list = st.session_state['gene_lists'].get(selected_list, [])
     if not identifier_list:
         st.error(f"The list '{selected_list}' is empty.")
         return
@@ -66,10 +66,10 @@ def handle_uniprot_id_list(diz, available_uniprot_lists):
 def handle_table(available_uniprot_lists):
     selected_table = st.selectbox("Select the table to save:", available_uniprot_lists)
 
-    if 'humanMPs_all' in st.session_state and selected_table in st.session_state:
+    if 'humanMPs_all' in st.session_state['gene_lists']:
         df = df_from_uniprots(
             st.session_state['df'],
-            st.session_state[selected_table]
+            st.session_state['gene_lists'][selected_table]
         )
 
         if not df.empty:
@@ -92,10 +92,10 @@ def handle_fasta(available_uniprot_lists):
         available_uniprot_lists
     )
 
-    if 'df' in st.session_state and selected_fasta in st.session_state:
+    if 'df' in st.session_state:
         df = df_from_uniprots(
             st.session_state['df'],
-            st.session_state[selected_fasta]
+            st.session_state['gene_lists'][selected_fasta]
         )
 
         if not df.empty and 'Sequence' in df.columns:

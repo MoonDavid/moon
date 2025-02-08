@@ -148,22 +148,24 @@ def main():
 
     st.header("Gene List Input")
     with st.form(key="gene_list_form"):
-        available_gene_lists = {key: value for key, value in st.session_state.items() if isinstance(value, list)}
+        available_gene_lists = {key: value for key, value in st.session_state['gene_lists'].items() if isinstance(value, list)}
         if available_gene_lists:
             sorted_gene_list_keys = list(available_gene_lists.keys())
             selected_gene_list = st.selectbox(
                 "Select the gene list to use:",
                 options=sorted_gene_list_keys,
-                index=sorted_gene_list_keys.index(st.session_state['selected_gene_list_enrichr']) if 'selected_gene_list_enrichr' in st.session_state else 0,
                 key='select_gene_list_enrichr'
             )
         else:
             st.warning("No gene list available in session state.")
             selected_gene_list = None
 
-        available_libraries = gp.get_library_name()
+
+        if "enrichr_libraries" not in st.session_state:
+            available_libraries = gp.get_library_name()
+            st.session_state["enrichr_libraries"] = available_libraries
         selected_libraries = st.multiselect("Select Enrichment Libraries",
-                                            options=available_libraries,
+                                            options=st.session_state["enrichr_libraries"],
                                             default=None,
                                             key='select_lib')
         submit_button = st.form_submit_button(label="Run Analysis")

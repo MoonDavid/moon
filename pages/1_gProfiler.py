@@ -1,8 +1,8 @@
+import numpy as np
+import plotly.express as px
 import streamlit as st
 from gprofiler import GProfiler
-import plotly.express as px
-import numpy as np
-import pandas as pd
+
 
 def run_gprofiler_profile():
     """Run Gene Ontology enrichment analysis using g:Profiler."""
@@ -39,7 +39,7 @@ def run_gprofiler_profile():
         st.write("### Select the Gene List and GO Namespaces:")
 
         # Select the list of genes from session state
-        available_gene_lists = {key: value for key, value in st.session_state.items() if isinstance(value, list)}
+        available_gene_lists = {key: value for key, value in st.session_state['gene_lists'].items() if isinstance(value, list)}
         if available_gene_lists:
             # Sort the gene lists to show the oldest first based on insertion order
             sorted_gene_list_keys = list(available_gene_lists.keys())
@@ -198,6 +198,7 @@ def run_gprofiler_profile():
             )
             st.plotly_chart(fig, use_container_width=True)
 
+
 def run_gprofiler_convert():
     """Run gene identifier conversion using g:Profiler."""
     st.header("Gene Identifier Conversion with g:Profiler")
@@ -210,7 +211,11 @@ def run_gprofiler_convert():
         st.write("### Select Conversion Parameters:")
 
         # Select the list of genes from session state
-        available_gene_lists = {key: value for key, value in st.session_state.items() if isinstance(value, list)}
+        available_gene_lists = {key: value for key, value in st.session_state['gene_lists'].items() if
+                                isinstance(value, list)}
+        # copy
+
+
         if available_gene_lists:
             sorted_gene_list_keys = list(available_gene_lists.keys())
             selected_gene_list = st.selectbox(
@@ -351,6 +356,7 @@ def run_gprofiler_convert():
                 mime="text/csv"
             )
 
+
 def main():
     st.set_page_config(page_title="gProfiler Enrichment Tool", layout="wide")
 
@@ -367,6 +373,7 @@ def main():
         run_gprofiler_profile()
     elif service == "Convert":
         run_gprofiler_convert()
+
 
 if __name__ == "__main__":
     main()

@@ -327,7 +327,7 @@ def show_intact_interactions_ui():
 
     # Preloaded gene lists from session state
     available_gene_lists = {
-        key: value for key, value in st.session_state.items() if isinstance(value, list)
+        key: value for key, value in st.session_state['gene_lists'].items() if isinstance(value, list)
     }
 
     if not available_gene_lists:
@@ -349,7 +349,6 @@ def show_intact_interactions_ui():
 
     selected_genes = available_gene_lists[selected_gene_list]
     st.write(f"**Selected Gene List:** {selected_gene_list}")
-    st.write(f"**Protein IDs in Gene List:** {', '.join(selected_genes)}")
 
     # File Processing
     filepath = "/home/davide/PycharmProjects/moonlight/lib/intact_human.csv"
