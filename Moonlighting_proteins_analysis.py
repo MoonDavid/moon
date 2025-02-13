@@ -424,7 +424,7 @@ def sequence_analysis_deepseek(filtered_data: pd.DataFrame):
 
     if 'Sequence' in filtered_data.columns:
         # Initialize ProteinAnalysis objects
-        st.write("## Protein Sequence Analysis")
+
 
         # Create tabs for different plots
         tab1, tab2, tab3, tab4, tab5 = st.tabs([
@@ -1368,6 +1368,13 @@ def disorder_analysis(data: pd.DataFrame, selected_df_name: str):
     - data (pd.DataFrame): The input DataFrame containing disorder information.
     - selected_df_name (str): The name of the selected DataFrame for display purposes.
     """
+    st.write(
+        "Intrinsically disordered proteins (IDPs) or intrinsically disordered regions (IDRs) are proteins or regions"
+        " of proteins that lack a fixed or ordered three-dimensional structure. IDPs are highly flexible and can"
+        " adopt different conformations in different contexts. They play crucial roles in various biological processes,"
+        " including signaling, transcription, and cell cycle regulation. Here, we analyze the disorder content of MPs in the selected dataset."
+        "  [DisProt](https://www.disprot.org/) is a database of proteins with experimentally verified disordered regions, while AlphaDB and MobiDB Lite are"
+        " databases that predict disordered regions in proteins.")
     # Select relevant columns for disorder analysis
     disorder_columns = [
         'UniProtKB-AC',
@@ -1394,14 +1401,7 @@ def disorder_analysis(data: pd.DataFrame, selected_df_name: str):
     st.dataframe(dataidp)
 
     # Calculate and display the number of NaNs per column
-    st.subheader("Missing Values Summary")
-    nan_counts = dataidp.isna().sum()
-    nan_df = nan_counts.reset_index()
-    nan_df.columns = ['Column', 'Number of NaNs']
-    st.table(nan_df)
 
-    # Visualize the distribution of disorder columns
-    st.subheader("Disorder regions percentage")
 
     # Identify numerical disorder columns for plotting
     numerical_cols = [
@@ -1415,6 +1415,7 @@ def disorder_analysis(data: pd.DataFrame, selected_df_name: str):
     idp_dict = {k: v for k, v in idp_dict.items() if not k.startswith("DP")}
     results_df = enrichment_analysis(dict=idp_dict, query_uniprots=df_to_uniprots(data), correction='fdr_bh')
     st.subheader("Enrichment Results")
+    st.write("The table below shows the results of the enrichment analysis using IDP ontology terms.")
     st.dataframe(results_df)
     # Check if numerical columns exist
     disorder_numerical_cols = [col for col in numerical_cols if col in dataidp.columns]
@@ -1629,7 +1630,6 @@ def enzymes(data: pd.DataFrame, selected_df_name: str):
     enzymes_df = data[data["EC number"].notna()].copy()
 
     # Main metrics
-    st.write("## 🧬 Enzymes Analysis", unsafe_allow_html=True)
 
     enzyme_count = enzymes_df.shape[0]
     total_count = data.shape[0]
@@ -1858,34 +1858,39 @@ def main():
             f"**Number of non-reviewed proteins:** {unreviewed_count}"
         )
 
-        # Subsequent Analyses Sections
-        st.subheader("GO terms")
-        with st.expander("See analysis"):
+
+
+        tab1, tab2, tab3, tab4, tab5, tab6, tab7 = st.tabs(
+            [
+                "GO Terms",
+                "Physicochemical Features",
+                "Protein Domains",
+                "RNA Binding Proteins",
+                "Enzymes",
+                "Disorder",
+                "Diseases",
+            ]
+        )
+
+        with tab1:
             feature_analysis(data, selected_df_name)
 
-        st.subheader("Protein physicochemical features ")
-        # Automatically run analysis without a button
-        with st.expander("See analysis"):
+        with tab2:
             sequence_analysis(data)
 
-        st.subheader("Protein domains")
-        with st.expander("See analysis"):
+        with tab3:
             interpro_analysis(data, selected_df_name)
 
-        st.subheader("RNA binding proteins")
-        with st.expander("See analysis"):
+        with tab4:
             rna_binding_analysis(data, selected_df_name)
 
-        st.subheader("Enzymes")
-        with st.expander("See analysis"):
+        with tab5:
             enzymes(data, selected_df_name)
 
-        st.subheader("Intrinsically disordered regions and proteins")
-        with st.expander("See analysis"):
+        with tab6:
             disorder_analysis(data, selected_df_name)
 
-        st.subheader("Diseases")
-        with st.expander("See analysis"):
+        with tab7:
             disease(data, selected_df_name)
 
 
