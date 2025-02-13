@@ -19,7 +19,7 @@ def load_spacy_model():
         return nlp
     except OSError:
         st.warning("⚠️ NER model not available. Showing only literature search results.")
-        return None, False
+        return None
 
 # Function to search PubMed
 def search_pubmed(search_term, retmax):

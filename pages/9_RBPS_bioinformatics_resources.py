@@ -9,7 +9,8 @@ import requests
 PAGE_TITLE = "RNA-Binding Protein bioinformatics resources"
 PAGE_DESCRIPTION = """
 This page provides information on various databases and tools related to RNA-binding proteins.
-Use the tabs below to switch between **Databases** and **Tools**.
+The section benchmarking use data from recent reviews of RNA-binding residues predictions tools.
+Use the tabs below to switch between **Databases** , **Tools** and **Benchmark**  .
 """
 
 
@@ -67,7 +68,7 @@ def initialize_page() -> None:
 #############################
 def main():
     initialize_page()
-    tab_databases, tab_tools = st.tabs(["Databases", "Tools"])
+    tab_databases, tab_tools, tab_bench = st.tabs(["Databases", "Tools","Benchmark"])
 
     #############################
     # Databases Tab
@@ -381,72 +382,94 @@ def main():
                 "capability to handle a wider range of biologically relevant scenarios."
             )
         )
+    with tab_bench:
+        st.header("RNA Binding Region(RBR) Prediction Methods Benchamrk")
 
-    st.divider()
-    st.header("RNA Binding Region(RBR) Prediction Methods Benchamrk")
+        st.subheader("Metrics used")
+        # Create two columns for MCC and AUC
+        col1, col2 = st.columns(2)
 
+        # Column for Matthews Correlation Coefficient (MCC)
+        with col1:
+            st.header("Matthews Correlation Coefficient (MCC)")
+            st.write("""
+            The Matthews Correlation Coefficient is a balanced measure that takes into account true and false positives and negatives.
+            It is especially useful for imbalanced datasets.
+            """)
+            st.latex(r"""
+            \text{MCC} = \frac{(TP \times TN) - (FP \times FN)}{\sqrt{(TP+FP)(TP+FN)(TN+FP)(TN+FN)}}
+            """)
+            st.write("""
+            **Interpretation:**
+            - **+1**: Perfect prediction.
+            - **0**: No better than random guessing.
+            - **-1**: Total disagreement between prediction and observation.
+            """)
 
+        # Column for Area Under the ROC Curve (AUC)
+        with col2:
+            st.header("Area Under the ROC Curve (AUC)")
+            st.write("""
+            The AUC measures the ability of a classifier to distinguish between classes.
+            It is the area under the ROC curve, which plots the True Positive Rate (TPR) against the False Positive Rate (FPR)
+            at various threshold settings.
+            """)
+            st.write("""
+            **Interpretation of AUC:**
+            - **1.0:** Perfect classifier.
+            - **0.5:** No better than random guessing.
+            - AUC represents the probability that a randomly chosen positive instance is ranked higher than a randomly chosen negative instance.
+            """)
+        data = {
+            "Method name": [
+                "Pprint",
+                "RNABindR-plus",
+                "DRNApred",
+                "HybridNAP",
+                "NucBind",
+                "ProNA2020",
+                "NCBRPred",
+                "iDRNA-ITF",
+                "Pprint2",
+                "MucLiPred",
+            ],
+            "Year published": [
+                2008,
+                2014,
+                2017,
+                2019,
+                2019,
+                2020,
+                2021,
+                2022,
+                2023,
+                2024,
+            ],
+            "AUC": [0.63, 0.73, 0.52, 0.59, 0.74, 0.68, 0.69, 0.77, 0.82, 0.84],
+            "MCC": [0.08, 0.15, 0.01, 0.05, 0.14, 0.10, 0.14, 0.19, 0.49, 0.43],
+        }
 
-    st.subheader("Metrics used")
-    # Create two columns for MCC and AUC
-    col1, col2 = st.columns(2)
+        # Create a DataFrame
+        df = pd.DataFrame(data)
 
-    # Column for Matthews Correlation Coefficient (MCC)
-    with col1:
-        st.header("Matthews Correlation Coefficient (MCC)")
-        st.write("""
-        The Matthews Correlation Coefficient is a balanced measure that takes into account true and false positives and negatives.
-        It is especially useful for imbalanced datasets.
-        """)
-        st.latex(r'''
-        \text{MCC} = \frac{(TP \times TN) - (FP \times FN)}{\sqrt{(TP+FP)(TP+FN)(TN+FP)(TN+FN)}}
-        ''')
-        st.write("""
-        **Interpretation:**
-        - **+1**: Perfect prediction.
-        - **0**: No better than random guessing.
-        - **-1**: Total disagreement between prediction and observation.
-        """)
+        # Streamlit display
+        st.subheader(
+            "Benchmark of prediction methods of RNA binding residues (Basu et al., 2025)"
+        )
+        st.write(
+            "[Basu et al.](https://doi.org/10.1093/bib/bbaf016) made a comparison of RNA Binding Region (RBR) prediction methods based on AUC and MCC. This benchmark evaluates various computational approaches for predicting RNA-binding residues in proteins, analyzing their effectiveness across structure- and disorder-annotated dataset"
+        )
+        st.dataframe(df)
 
-    # Column for Area Under the ROC Curve (AUC)
-    with col2:
-        st.header("Area Under the ROC Curve (AUC)")
-        st.write("""
-        The AUC measures the ability of a classifier to distinguish between classes.
-        It is the area under the ROC curve, which plots the True Positive Rate (TPR) against the False Positive Rate (FPR)
-        at various threshold settings.
-        """)
-        st.write("""
-        **Interpretation of AUC:**
-        - **1.0:** Perfect classifier.
-        - **0.5:** No better than random guessing.
-        - AUC represents the probability that a randomly chosen positive instance is ranked higher than a randomly chosen negative instance.
-        """)
-    data = {
-        "Method name": [
-            "Pprint", "RNABindR-plus", "DRNApred", "HybridNAP", "NucBind",
-            "ProNA2020", "NCBRPred", "iDRNA-ITF", "Pprint2", "MucLiPred"
-        ],
-        "Year published": [2008, 2014, 2017, 2019, 2019, 2020, 2021, 2022, 2023, 2024],
-        "AUC": [0.63, 0.73, 0.52, 0.59, 0.74, 0.68, 0.69, 0.77, 0.82, 0.84],
-        "MCC": [0.08, 0.15, 0.01, 0.05, 0.14, 0.10, 0.14, 0.19, 0.49, 0.43]
-    }
-
-    # Create a DataFrame
-    df = pd.DataFrame(data)
-
-    # Streamlit display
-    st.subheader("Benchmark of prediction methods of RNA binding residues (Basu et al., 2025)")
-    st.write("[Basu et al.](https://doi.org/10.1093/bib/bbaf016) made a comparison of RNA Binding Region (RBR) prediction methods based on AUC and MCC. This benchmark evaluates various computational approaches for predicting RNA-binding residues in proteins, analyzing their effectiveness across structure- and disorder-annotated dataset")
-    st.dataframe(df)
-
-    # Button to generate the plot
-    st.scatter_chart(
+        # Button to generate the plot
+        st.scatter_chart(
             df,
             x="AUC",
             y="MCC",
             color="Method name",
         )
+
+
 
 if __name__ == "__main__":
     main()
