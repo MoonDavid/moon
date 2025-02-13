@@ -18,8 +18,8 @@ def load_spacy_model():
         nlp = spacy.load("en_ner_bionlp13cg_md")
         return nlp
     except OSError:
-        st.error("spaCy model 'en_ner_bionlp13cg_md' not found. Please install it using:\n\npython -m spacy download en_ner_bionlp13cg_md")
-        st.stop()
+        st.warning("⚠️ NER model not available. Showing only literature search results.")
+        return None, False
 
 # Function to search PubMed
 def search_pubmed(search_term, retmax):
@@ -158,18 +158,20 @@ def main():
 
             with st.spinner("Performing Named Entity Recognition (NER)..."):
                 nlp = load_spacy_model()
-                diz = perform_ner(articles, nlp)
-                st.success("NER completed.")
+                if nlp:
+                    diz = perform_ner(articles, nlp)
+                    st.success("NER completed.")
 
             # Prepare DataFrame
             data = []
             for article in articles:
                 doi_link = create_doi_link(article["doi"])
-                entities = ", ".join(diz.get(article["doi"], []))
+                if nlp:
+                    entities = ", ".join(diz.get(article["doi"], []))
                 data.append({
                     "DOI": doi_link,
                     "Title": article["title"],
-                    "Entities": entities
+                    "Entities": entities if nlp else "NER not available",
                 })
 
             df = pd.DataFrame(data)

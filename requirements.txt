@@ -18,3 +18,4 @@ mygene
 venny4py
 altair
 detect_delimiter
+stmol

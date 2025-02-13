@@ -217,7 +217,7 @@ def main():
         """)
 
     # Load data from CSV
-    file_path = r"C:\Users\david\PycharmProjects\dataframes\clipseq.csv"
+    file_path = r"data/clipseq.csv"
     data = load_data(file_path)
     data.rename(columns={"source": "experiment"}, inplace=True)
     data["source"] = data["rbp"]
