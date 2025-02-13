@@ -7,6 +7,14 @@ from gprofiler import GProfiler
 def run_gprofiler_profile():
     """Run Gene Ontology enrichment analysis using g:Profiler."""
     st.header("Functional Profiling with g:Profiler")
+    st.info("""
+    **What is gProfiler?**
+    gProfiler is a powerful web tool for functional enrichment analysis and identifier conversion for genes and proteins.
+    Use the sidebar to switch between:
+    - **Profile**: Analyze your gene list for enrichment(ORA, Over Rappresentation Analysis) using g:Profiler
+    - **Convert**: Transform gene/protein IDs between different naming conventions and databases
+    """)
+
     st.write("""
     This application allows you to perform Gene Ontology enrichment analysis using 
     [g:Profiler](https://biit.cs.ut.ee/gprofiler/gost).
@@ -202,6 +210,14 @@ def run_gprofiler_profile():
 def run_gprofiler_convert():
     """Run gene identifier conversion using g:Profiler."""
     st.header("Gene Identifier Conversion with g:Profiler")
+
+    st.info("""
+    **What is gProfiler?**
+    gProfiler is a powerful web tool for functional enrichment analysis and identifier conversion for genes and proteins.
+    Use the sidebar to switch between:
+    - **Profile**: Analyze your gene list for enrichment(ORA, Over Rappresentation Analysis) using g:Profiler
+    - **Convert**: Transform gene/protein IDs between different naming conventions and databases
+    """)
     st.write("""
     This application allows you to convert gene identifiers using 
     [g:Profiler](https://biit.cs.ut.ee/gprofiler/gost).

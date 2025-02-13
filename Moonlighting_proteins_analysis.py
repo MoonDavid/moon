@@ -1600,48 +1600,160 @@ def disease(data: pd.DataFrame, selected_df_name: str):
         xaxis_title='Dataset'
     )
     st.plotly_chart(fig)
-
 def enzymes(data: pd.DataFrame, selected_df_name: str):
-    # Define a function to split and clean the EC_number strings.
+    import plotly.graph_objects as go
+    import plotly.express as px
+
+    # EC class descriptions
+    ec_descriptions = {
+        "1": "Oxidoreductases: Transfer of H and O atoms or electrons between substances",
+        "2": "Transferases: Transfer of functional groups between substances",
+        "3": "Hydrolases: Formation of products by hydrolysis",
+        "4": "Lyases: Non-hydrolytic addition or removal of groups",
+        "5": "Isomerases: Intramolecular rearrangement",
+        "6": "Ligases: Join molecules with ATP breakdown",
+        "7": "Translocases: Movement of molecules across membranes",
+    }
+
+    # Define custom colors for consistency across plots
+    colors = [
+        "#ff9999",
+        "#66b3ff",
+        "#99ff99",
+        "#ffcc99",
+        "#ff99cc",
+        "#99ccff",
+        "#ffff99",
+    ]
+
     enzymes_df = data[data["EC number"].notna()].copy()
-    st.write("### Enzymes analysis")
+
+    # Main metrics
+    st.write("## 🧬 Enzymes Analysis", unsafe_allow_html=True)
+
     enzyme_count = enzymes_df.shape[0]
     total_count = data.shape[0]
-    st.metric(label=f"Enzymes in {selected_df_name}", value=f"{enzyme_count}/{total_count}")
+    percentage = (enzyme_count / total_count) * 100
 
+    st.metric(
+        label=f"Enzymes in {selected_df_name}",
+        value=f"{enzyme_count}/{total_count}"
+    )
 
-    # Apply the function to create a list of EC numbers in a new column.
+    # Process EC numbers
     enzymes_df["EC_exploded"] = enzymes_df["EC number"].str.split("; ")
-
-    # Explode the list so that each row corresponds to a single EC number.
     enzymes_exploded = enzymes_df.explode("EC_exploded")
-    enzymes_exploded=enzymes_exploded['EC_exploded']
+    enzymes_exploded["EC_class"] = enzymes_exploded["EC_exploded"].str.split(".").str[0]
 
+    protein_ec_classes = enzymes_exploded.groupby("UniProtKB-AC")[
+        "EC_class"
+    ].nunique()
 
+    enzymes_exploded = enzymes_exploded["EC_exploded"]
 
-    st.write("### Frequency of EC Classes")
+    # EC Classes data preparation
     ec_classes = enzymes_exploded.str.split(".").str[0]
-
-    # Count occurrences of each EC class
     class_counts = ec_classes.value_counts()
 
-    # Display the bar chart using Streamlit
-    st.bar_chart(class_counts)
 
-    st.write("### Frequency of EC Subclasses")
+    # Create legend labels
+    legend_labels = [
+        f"EC {i}: {ec_descriptions[i].split(':')[0]}" for i in class_counts.index
+    ]
+
+    st.write("### EC Classes Analysis", unsafe_allow_html=True)
+    # Pie Chart using Plotly
+    fig_pie = go.Figure(
+        data=[
+            go.Pie(
+                labels=legend_labels,
+                values=class_counts.values,
+                hovertemplate="<b>%{label}</b><br>"
+                + "Count: %{value}<br>"
+                + "<b>Percentage: %{percent}</b><extra></extra>",
+                textinfo="percent",
+                marker=dict(colors=colors[: len(class_counts)]),
+            )
+        ]
+    )
+
+    fig_pie.update_layout(
+        title="EC Classes Distribution (%)",
+        width=1200,
+        height=600,
+        showlegend=True,
+        legend=dict(yanchor="top", y=1, xanchor="left", x=1,font=dict(size=24)),
+    )
+
+    st.plotly_chart(fig_pie, use_container_width=True)
+
+    st.write("### Enzymes with Multiple EC Classes")
+
+    ec_class_distribution = protein_ec_classes.value_counts().reset_index()
+    proteins_multi_classes = protein_ec_classes[protein_ec_classes > 1]
+    ec_class_distribution.columns = ["Number of EC Classes", "Protein Count"]
+    st.metric(
+        label=f"Enzymes with Multiple EC Classes in {selected_df_name}",
+        value=f"{len(proteins_multi_classes)}/{enzyme_count}",    )
+    # Step 7: Create a pie chart using Plotly Express
+    fig = px.pie(
+        ec_class_distribution,
+        names="Number of EC Classes",
+        values="Protein Count",
+        title="Distribution of Proteins by Number of EC Classes",
+    )
+    st.plotly_chart(fig, use_container_width=True)
+
+
+    selected_proteins = data[data["UniProtKB-AC"].isin(proteins_multi_classes.index)]
+#ADD Column from protein_ec_classes in data
+    selected_proteins["Count_diff_EC_classes"] = selected_proteins["UniProtKB-AC"].map(protein_ec_classes)
+    #reorder columns with   EC number first
+    selected_proteins = selected_proteins[["UniProtKB-AC", "EC number","Count_diff_EC_classes"] + [col for col in selected_proteins.columns if col not in ["UniProtKB-AC", "EC number","Count_diff_EC_classes"]]]
+    st.dataframe(selected_proteins)
+
+    st.write("### EC Subclasses Analysis", unsafe_allow_html=True)
     ec_subclasses = enzymes_exploded.str.split(".").str[:2].str.join(".")
-    subclass_counts = ec_subclasses.value_counts()
-    st.bar_chart(subclass_counts)
+    subclass_counts = ec_subclasses.value_counts().head(10)  # Show top 10 subclasses
 
-    # Button to save the gene list for enzyme proteins to the session state.
+    # Interactive bar chart for subclasses
+    fig_subclass = go.Figure()
+    fig_subclass.add_trace(
+        go.Bar(
+            x=subclass_counts.index,
+            y=subclass_counts.values,
+            text=subclass_counts.values,
+            textposition="auto",
+            marker_color=colors[: len(subclass_counts)],
+            hovertemplate="<b>%{x}</b><br>" + "Count: %{y}<extra></extra>",
+        )
+    )
+
+    fig_subclass.update_layout(
+        title="Top 10 EC Subclasses",
+        xaxis_title="EC Subclass",
+        yaxis_title="Count",
+        width=1200,
+        height=600,
+        hoverlabel=dict(bgcolor="white"),
+        xaxis={"categoryorder": "total descending"},
+    )
+
+    st.plotly_chart(fig_subclass, use_container_width=True)
+
+    # Save enzyme gene list functionality
+    st.write("## 💾 Save Enzyme Gene List", unsafe_allow_html=True)
     if st.button("Save Enzyme Gene List"):
         enzyme_genes = enzymes_df["UniProtKB-AC"].tolist()
         session_key = f"Enzymes_{selected_df_name}"
-        if session_key not in st.session_state['gene_lists']:
-            st.session_state['gene_lists'][session_key] = enzyme_genes
-            st.success(f"Enzyme UniProtKB-AC list saved in session state with key: {session_key}")
+        if session_key not in st.session_state["gene_lists"]:
+            st.session_state["gene_lists"][session_key] = enzyme_genes
+            st.success(
+                f"✅ Enzyme UniProtKB-AC list saved in session state with key: {session_key}"
+            )
         else:
-            st.warning("Gene list already exists in session state.")
+            st.warning("⚠️ Gene list already exists in session state.")
+
 
 
 

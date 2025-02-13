@@ -170,7 +170,14 @@ def main():
     st.set_page_config(page_title="PANTHER Enrichment Tool", page_icon="📈", layout="wide")
     st.sidebar.header("PANTHER Enrichment Tool")
     st.header("PANTHER Overrepresentation (GO Enrichment)")
+    st.info(
+        """
+        This page is designed to integrate and perform bioinformatic analyses using the [PANTHER classification system](https://pantherdb.org/). 
+        PANTHER (Protein ANalysis THrough Evolutionary Relationships) provides tools for functional analysis of gene lists, including pathways and gene ontology (GO) overrepresentation analysis.  
 
+        Explore the [PANTHER database](https://pantherdb.org/) for more details.
+        """
+    )
 
     if 'gene_lists' not in st.session_state:
         st.warning(
