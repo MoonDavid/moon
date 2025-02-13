@@ -8,7 +8,7 @@ from urllib.parse import quote
 from Bio.Entrez import api_key
 
 # Set up BioPython/Entrez
-Entrez.email = "davide.gotta@gmail.com"
+
 # Entrez.api_key = "YOUR_NCBI_API_KEY"  # Uncomment and set if you have an API key
 
 # Cache the spaCy model to avoid reloading on every run
@@ -21,67 +21,96 @@ def load_spacy_model():
         st.warning("⚠️ NER model not available. Showing only literature search results.")
         return None
 
-# Function to search PubMed
-def search_pubmed(search_term, retmax):
-    handle = Entrez.esearch(db="pubmed", term=search_term, retmax=retmax)
-    search_results = Entrez.read(handle)
-    handle.close()
-    id_list = search_results.get("IdList", [])
-    return id_list
+def search_pubmed(term, retmax,mail):
+    try:
+        Entrez.email = mail # Always provide email for NCBI
+        handle = Entrez.esearch(db="pubmed", term=term, retmax=retmax)
+        search_results = Entrez.read(handle)
+        return search_results
+    except RuntimeError as e:
+        print("Error encountered:", e)
+        handle.seek(0)  # Go back to start of the handle to inspect its content
+        print(handle.read())  # Dump the response for analysis
+        raise
+        st.stop()
+
 
 # Function to fetch PubMed abstracts
+from Bio import Entrez
+from Bio.Entrez import Parser
+
+
+from Bio import Entrez
+from Bio.Entrez import Parser
+
+
 def fetch_abstracts(id_list):
     abstracts = []
     articles = []
-    if id_list:
+    if not id_list:
+        return articles  # Return an empty list if no ID is provided
+
+    try:
+        # Attempt to fetch the data
         fetch_handle = Entrez.efetch(db="pubmed", id=",".join(id_list), retmode="xml")
-        records = Entrez.read(fetch_handle)
-        fetch_handle.close()
+        try:
+            # Attempt to parse the XML response
+            records = Entrez.read(fetch_handle)
+        except (Parser.DataError, ValueError) as parse_error:
+            print(f"Error parsing PubMed response: {parse_error}")
+            return articles  # Return articles collected so far if parsing fails
+        finally:
+            fetch_handle.close()
 
         for pubmed_article in records.get("PubmedArticle", []):
-            # Extract MedlineCitation and Article sections
-            medline = pubmed_article.get("MedlineCitation", {})
-            article = medline.get("Article", {})
+            try:
+                # Extract MedlineCitation and Article sections
+                medline = pubmed_article.get("MedlineCitation", {})
+                article = medline.get("Article", {})
 
-            # Extract the article title
-            title = article.get("ArticleTitle", "")
+                # Extract the article title
+                title = article.get("ArticleTitle", "")
 
-            # Extract the abstract text
-            abstract_data = article.get("Abstract", {}).get("AbstractText", [])
+                # Extract the abstract text
+                abstract_data = article.get("Abstract", {}).get("AbstractText", [])
 
-            # Extract DOI from PubmedData -> ArticleIdList
-            pubmed_data = pubmed_article.get("PubmedData", {})
-            article_ids = pubmed_data.get("ArticleIdList", [])
-            doi = ""
-            for id_obj in article_ids:
-                # id_obj can be a string or a dictionary-like object with attributes
-                if isinstance(id_obj, dict):
-                    id_type = id_obj.get("IdType", "").lower()
-                    if id_type == "doi":
-                        doi = id_obj.get("#text", "")
-                        break
-                elif isinstance(id_obj, str):
-                    # If id_obj is a string, sometimes the DOI can be identified by its format
-                    if id_obj.startswith("10."):  # DOI typically starts with '10.'
-                        doi = id_obj
-                        break
+                # Extract DOI from PubmedData -> ArticleIdList
+                pubmed_data = pubmed_article.get("PubmedData", {})
+                article_ids = pubmed_data.get("ArticleIdList", [])
+                doi = ""
+                for id_obj in article_ids:
+                    # id_obj can be a string or a dictionary-like object with attributes
+                    if isinstance(id_obj, dict):
+                        id_type = id_obj.get("IdType", "").lower()
+                        if id_type == "doi":
+                            doi = id_obj.get("#text", "")
+                            break
+                    elif isinstance(id_obj, str):
+                        # If id_obj is a string, sometimes the DOI can be identified by its format
+                        if id_obj.startswith("10."):  # DOI typically starts with '10.'
+                            doi = id_obj
+                            break
 
-            # Concatenate abstract paragraphs if present
-            if abstract_data:
-                full_abstract = " ".join(abstract_data)
-                articles.append({
-                    "title": title,
-                    "doi": doi,
-                    "abstract": full_abstract
-                })
-            else:
-                # Handle articles without an abstract
-                articles.append({
-                    "title": title,
-                    "doi": doi,
-                    "abstract": ""
-                })
+                # Concatenate abstract paragraphs if present
+                if abstract_data:
+                    full_abstract = " ".join(abstract_data)
+                    articles.append(
+                        {"title": title, "doi": doi, "abstract": full_abstract}
+                    )
+                else:
+                    # Handle articles without an abstract
+                    articles.append({"title": title, "doi": doi, "abstract": ""})
+            except Exception as e:
+                print(f"Error processing PubMedArticle object: {e}")
+                continue  # Move on to the next article if there's an error
+
+    except IOError as e:
+        print(f"Network or file I/O error occurred: {e}")
+    except Exception as e:
+        print(f"An unexpected error occurred: {e}")
+
     return articles
+
 
 # Function to perform NER on abstracts
 def perform_ner(articles, nlp):
@@ -135,6 +164,12 @@ def main():
         step=1,
         help="Specify the maximum number of articles to retrieve (up to 10,000)."
     )
+    #input email Entrez
+    mail = st.text_input(
+        "Email",
+        value="",
+        help="Enter your email address for NCBI."
+    )
 
     # Optional input for Entrez API Key
     api_key = st.text_input(
@@ -148,7 +183,7 @@ def main():
 
     if st.button("Search"):
         with st.spinner("Searching PubMed..."):
-            id_list = search_pubmed(search_term, retmax)
+            id_list = search_pubmed(search_term, retmax,mail)
             st.write(f"Found {len(id_list)} articles for the search term: **{search_term}**")
 
         if id_list:
