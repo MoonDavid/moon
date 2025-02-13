@@ -144,11 +144,13 @@ def handle_fasta(available_uniprot_lists):
 
 def main():
     configure_page()
-
+    if 'gene_lists' not in st.session_state:
+        st.warning(
+            "No pre-loaded MPs list found in session state. Please load first main page Moonlighting Proteins Analysis to add some."
+        )
+        st.stop()
     available_uniprot_lists = get_lists_from_session()
-    if not available_uniprot_lists:
-        st.warning("No UniProt ID lists available in the session state to save as identifiers.")
-        return
+
 
     data_type = st.selectbox(
         "Select the type of data you want to save:",

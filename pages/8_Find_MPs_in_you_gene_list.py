@@ -5,7 +5,11 @@ from mygene import MyGeneInfo
 from gprofiler import GProfiler
 from detect_delimiter import detect
 from venny4py.venny4py import *
-
+if "gene_lists" not in st.session_state:
+    st.warning(
+        "No pre-loaded MPs list found in session state. Please load first main page Moonlighting Proteins Analysis to add some."
+    )
+    st.stop()
 # Retrieve session_state items (make sure these are set somewhere in your app)
 DF = st.session_state.get('df', None)
 HUMANMPs_all = st.session_state['gene_lists'].get('humanMPs_all', None)
@@ -90,14 +94,12 @@ def main():
     )
 
     # Sidebar with instructions and about info
-    with st.sidebar:
-        st.header("Instructions")
-        st.markdown(
+    st.info(
             """
             1. **Enter** your gene/protein identifiers in the text area below.  
             2. **Select** your input delimiter or choose auto-detection.  
             3. **Click** on the **Convert & Check** button.  
-            4. **Review** the conversion results and see which proteins are marked as moonlighting.
+            4. **Review** the conversion results and see which proteins are marked as moonlighting and in which databases.
             """
         )
 

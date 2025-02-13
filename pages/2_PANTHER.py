@@ -57,12 +57,9 @@ def panther_overrepresentation_analysis():
     """
     Run PANTHER overrepresentation analysis within a Streamlit form.
     """
-    st.header("PANTHER Overrepresentation (GO Enrichment)")
 
     available_gene_lists = {key: value for key, value in st.session_state['gene_lists'].items() if isinstance(value, list)}
-    if not available_gene_lists:
-        st.warning("No gene list available in session state.")
-        return
+
 
     # Create a form for input parameters
     with st.form(key='panther_enrichment_form'):
@@ -172,7 +169,14 @@ def panther_overrepresentation_analysis():
 def main():
     st.set_page_config(page_title="PANTHER Enrichment Tool", page_icon="📈", layout="wide")
     st.sidebar.header("PANTHER Enrichment Tool")
+    st.header("PANTHER Overrepresentation (GO Enrichment)")
 
+
+    if 'gene_lists' not in st.session_state:
+        st.warning(
+            "No pre-loaded MPs list found in session state. Please load first main page Moonlighting Proteins Analysis to add some."
+        )
+        st.stop()
     panther_overrepresentation_analysis()
 
 

@@ -136,9 +136,17 @@ def read_background(text):
 
 
 def main():
+
     st.title("Enrichr Gene Set Enrichment Analysis")
+
     st.write("This tool uses [Enrichr](https://maayanlab.cloud/Enrichr/)  to perform gene set enrichment analysis. "
              "[Enrichr](https://maayanlab.cloud/Enrichr/) is a comprehensive gene set enrichment analysis tool and search engine that provides access to curated gene set libraries, advanced visualization features, and resources for biological discovery.")
+    if 'gene_lists' not in st.session_state:
+        st.warning(
+            "No pre-loaded MPs list found in session state. Please load first main page Moonlighting Proteins Analysis to add some."
+        )
+        st.stop()
+    available_gene_lists = {key: value for key, value in st.session_state['gene_lists'].items() if isinstance(value, list)}
 
     if 'gene_lists' not in st.session_state:
         st.session_state['gene_lists'] = {}

@@ -174,15 +174,45 @@ def calculate_centralities(G: nx.Graph) -> pd.DataFrame:
         "Eigenvector": nx.eigenvector_centrality(G, max_iter=1000)
     }).round(4)
     return centrality_df
+@st.cache_data
+def network_STRING(string_ids):
+    js_array = "[" + ",".join(f"'{p}'" for p in string_ids) + "]"
+    html_code = f"""
+    <!DOCTYPE html>
+    <html>
+      <head>
+        <!-- Embed the STRING's javascript library -->
+        <script type="text/javascript" src="https://string-db.org/javascript/combined_embedded_network_v2.0.4.js"></script>
+      </head>
+      <body>
+        <!-- This DIV is where the network will be placed -->
+        <div id="stringEmbedded"></div>
 
+        <script>
+          // Convert Python protein list into JS array
+          var proteins = {js_array};
 
+          // Call STRING API to render the interactive network
+          getSTRING('https://string-db.org', {{
+              'species': '9606',                // Human
+              'identifiers': proteins,         // e.g. ['TP53','EGFR','CDK2']
+              'network_flavor': 'confidence',   // style of edges
+              'caller_identity': 'my_streamlit_app'
+          }});
+        </script>
+      </body>
+    </html>
+    """
+    return html_code
+@st.cache_data
 def create_pyvis_network(
-    G: nx.Graph,
+    _G: nx.Graph,
     physics_enabled: bool,
     node_size: int,
     edge_width: int,
     color_scheme: str,
-    weight_col=None
+    weight_col=None,
+    show_advanced_options: bool = False
 ) -> Network:
     """
     Build a PyVis Network visualization from a NetworkX graph.
@@ -192,45 +222,29 @@ def create_pyvis_network(
     :param node_size: Size of the nodes
     :param edge_width: Width of the edges
     :param color_scheme: Visualization color scheme
-    :param weight_col: Which column in edge_attr to treat as weight
+                         Options: "Default", "Degree-based", "Community-based"
+    :param weight_col: (Optional) Which column in edge data to treat as weight
+    :param show_advanced_options: Whether to display advanced configuration options
     :return: PyVis Network object
     """
+    G = _G.copy()
     nt = Network(
-        height="600px",
+        height="800px",
         width="100%",
         bgcolor="#ffffff",
         font_color="black",
         notebook=False
     )
 
-    # If your network is large, you might want to tweak the repulsion
-    # settings (node_distance, spring_length, etc.) so it doesn’t
-    # ‘explode’ or keep moving:
-    nt.repulsion(
-        node_distance=120,      # more distance = more spread out
-        central_gravity=0.2,    # 0.0 to 1.0
-        spring_length=150,      # length of the edges
-        spring_strength=0.05,   # higher = more rigid edges
-        damping=0.09
-    )
+    # Toggle physics simulation based on user input
+    nt.toggle_physics(physics_enabled)
 
-    # Toggle physics only if user checks the box,
-    # otherwise forcibly disable it:
-    if physics_enabled:
-        nt.toggle_physics(True)
-    else:
-        nt.toggle_physics(False)
-
-    # (Optional) Show a physics GUI in the final HTML,
-    # so you can manually tweak the layout in the browser:
-    # nt.show_buttons(filter_=['physics'])
-
-    # Color scheme: example of degree-based or community-based
+    # Configure node appearance based on the chosen color scheme
     if color_scheme == "Degree-based":
         degree_dict = dict(G.degree())
         max_degree = max(degree_dict.values()) if degree_dict else 1
         for node in G.nodes():
-            # Simple gradient from 0 to 255 in red channel
+            # Create a gradient effect on the red channel based on degree
             deg_val = int((degree_dict[node] / max_degree) * 255)
             node_color = f"#{deg_val:02x}0000"
             nt.add_node(node, label=node, size=node_size, color=node_color)
@@ -242,7 +256,7 @@ def create_pyvis_network(
         for i, comm in enumerate(communities):
             rgb = color_map[i][:3]
             color_hex = "#{:02x}{:02x}{:02x}".format(
-                int(rgb[0]*255), int(rgb[1]*255), int(rgb[2]*255)
+                int(rgb[0] * 255), int(rgb[1] * 255), int(rgb[2] * 255)
             )
             for node in comm:
                 node_colors[node] = color_hex
@@ -250,46 +264,25 @@ def create_pyvis_network(
             color = node_colors.get(node, "#97C2FC")
             nt.add_node(node, label=node, size=node_size, color=color)
     else:
-        # Default color scheme
+        # Default scheme (no color customization)
         for node in G.nodes():
             nt.add_node(node, label=node, size=node_size)
 
-    # Add edges
-    for edge in G.edges(data=True):
+    # Add edges to the network, optionally using a weight column
+    for u, v, data in G.edges(data=True):
         if weight_col:
-            weight = edge[2].get(weight_col, 1)
-        nt.add_edge(edge[0], edge[1], width=edge_width)
+            weight = data.get(weight_col, 1)
+            nt.add_edge(u, v, width=edge_width, value=weight)
+        else:
+            nt.add_edge(u, v, width=edge_width)
 
-    # Provide advanced config for physics/stabilization
-    # Increase stabilization iterations for larger graphs:
-    nt.set_options(""" 
-    var options = {
-      "nodes": {
-        "font": {"size": 12}
-      },
-      "edges": {
-        "smooth": false
-      },
-      "physics": {
-        "enabled": true,
-        "solver": "barnesHut",
-        "barnesHut": {
-          "gravitationalConstant": -8000,
-          "centralGravity": 0.2,
-          "springLength": 150,
-          "springConstant": 0.04,
-          "damping": 0.09,
-          "avoidOverlap": 1
-        },
-        "stabilization": {
-          "enabled": true,
-          "iterations": 800
-        }
-      }
-    }
-    """)
+    # If the user wants to see advanced configuration options,
+    # display all available options via nt.show_options()
+    if show_advanced_options:
+        nt.show_buttons(filter_=['physics'])
 
     return nt
+
 def render_pyvis_network(nt: Network):
     """
     Render the PyVis Network in a Streamlit app and provide a download button.
@@ -299,12 +292,14 @@ def render_pyvis_network(nt: Network):
     try:
         path = "network.html"
         nt.save_graph(path)
-        with open(path, 'r', encoding='utf-8') as file:
+        with open(path, "r", encoding="utf-8") as file:
             html_content = file.read()
-        components.html(html_content, height=600)
 
-        # Download button
-        with open(path, 'rb') as file:
+        # Render the network visualization within Streamlit
+        components.html(html_content, height=1300,scrolling=True)
+
+        # Provide a download button for the generated HTML file
+        with open(path, "rb") as file:
             st.download_button(
                 label="Download Network Visualization",
                 data=file,
@@ -420,11 +415,20 @@ def show_string_interactions_ui():
     """
     UI and logic for retrieving and visualizing protein-protein interactions.
     """
-    st.header("🔗 Get Protein-Protein Interactions")
+    st.header("🔗 Get Protein-Protein Interactions from STRING")
+    if "string_ids" not in st.session_state:
+        st.session_state.update(
+            {
+                "string_ids": [],
+                "interactions_df": None,
+                "G": None,
+                "form_string": False,  # Track last submission
+            }
+        )
 
     # Attempt to fetch available gene lists from session state
     available_gene_lists = {
-        key: value for key, value in st.session_state.items() if isinstance(value, list)
+        key: value for key, value in st.session_state['gene_lists'].items() if isinstance(value, list)
     }
 
     if not available_gene_lists:
@@ -451,28 +455,31 @@ def show_string_interactions_ui():
         )
         # Add a submit button
         submit_button = st.form_submit_button("Submit")
+        if submit_button:
+            st.session_state['form_string']=True
 
 
     # Sidebar parametersshow_string_interactions_ui()
 
-    if submit_button:
+    if st.session_state['form_string']:
         species = int(species) if species else 9606
-        proteins = ','.join(available_gene_lists[selected_gene_list])
+        proteins = available_gene_lists[selected_gene_list]
+        string_ids = st.session_state["df"].loc[
+            st.session_state["df"]["UniProtKB-AC"].isin(proteins), "STRING"
+        ].dropna().tolist()
+        st.session_state['string_ids']=string_ids
+
         st.write(f"Selected gene list: {selected_gene_list}")
         st.write(f"Protein IDs: {proteins}")
         if proteins:
             try:
                 with st.spinner("Fetching interactions..."):
                     interactions_df = get_interactions(
-                        proteins,
+                        string_ids,
                         required_score=required_score,
                         species=species,
                         limit=limit
                     )
-                    st.write(f"**Number of Interactions:** {len(interactions_df)}")
-                    #interactions_df['UniProtSource'] = interactions_df.iloc[:, 0].map(string_to_uniprots)
-                    #interactions_df['UniProtTarget'] = interactions_df.iloc[:, 1].map(string_to_uniprots)
-                    st.dataframe(interactions_df)
                     # Store data in session
                     st.session_state["interactions_df"] = interactions_df
 
@@ -488,7 +495,7 @@ def show_string_interactions_ui():
                 return
 
     # If data is available, show it
-    if "interactions_df" in st.session_state and "G" in st.session_state:
+    if st.session_state["interactions_df"] is not None:
         interactions_df = st.session_state.interactions_df
         G = st.session_state.G
 
@@ -509,43 +516,44 @@ def show_string_interactions_ui():
         st.write(f"**Top 5 Nodes by Degree Centrality:** {', '.join(top_degree)}")
 
 
-        st.subheader("Networkx Visualization")
-        plt.figure(figsize=(10, 6))
+        st.subheader("STRING Network Visualization")
+        html_code = network_STRING(st.session_state['string_ids'])
+        components.html(html_code, height=1300, scrolling=True)
 
-        # Draw the graph
-        nx.draw(G,
-                with_labels=True,
-                node_color='lightblue',
-                edge_color='gray',
-                node_size=500,
-                font_size=16,
-                font_weight='bold')
-
-        # Display the graph in Streamlit
-        st.pyplot(plt)
         # Create and render the network
         st.subheader("Pyvis Interactive Network Visualization")
-
         st.subheader("Network Visualization Options")
-        physics_enabled = st.checkbox("Enable Physics", value=False)
+
+        # Visualization options for the user
+        #physics_enabled = st.checkbox("Enable Physics", value=False)
         node_size = st.slider("Node Size", min_value=10, max_value=50, value=20)
+
         col1, col2 = st.columns(2)
         with col1:
             edge_width = st.slider("Edge Width", min_value=1, max_value=10, value=2)
         with col2:
             color_scheme = st.selectbox(
-                "Color Scheme",
-                options=["Default", "Degree-based", "Community-based"]
+                "Color Scheme", options=["Default", "Degree-based", "Community-based"]
             )
+
+        # Option to display advanced configuration options in the visualization
+        #show_advanced_options = st.checkbox("Show Advanced Options", value=False)
+
+        # For demonstration purposes, let's create an example graph.
+        # Replace this with your actual graph and weight column (if any).
+
+        weight_col = None  # Replace with your edge weight column if applicable
+
+        # Create and render the network visualization
         nt = create_pyvis_network(
             G,
-            physics_enabled=physics_enabled,
+            physics_enabled=True,
             node_size=node_size,
             edge_width=edge_width,
             color_scheme=color_scheme,
-            weight_col=weight_col
+            weight_col=weight_col,
+            show_advanced_options=True,
         )
-
         render_pyvis_network(nt)
 
 
@@ -615,7 +623,11 @@ def main():
 
     # Sidebar for common parameters
     st.sidebar.header("Input Parameters")
-
+    if "gene_lists" not in st.session_state:
+        st.warning(
+            "No pre-loaded MPs list found in session state. Please load first main page Moonlighting Proteins Analysis to add some."
+        )
+        st.stop()
     if database_option == "STRING":
         st.subheader("STRING Database Selected")
         st.text("Use the STRING API to retrieve protein-protein interactions.")
@@ -645,8 +657,11 @@ def main():
             key: value for key, value in st.session_state.items() if isinstance(value, list)
         }
 
+
         if not available_gene_lists:
-            st.warning("No pre-loaded gene lists found in session state. Please upload gene lists.")
+            st.warning(
+                "No pre-loaded MPs list found in session state. Please load first main page Moonlighting Proteins Analysis to add some."
+            )
         else:
             with st.form("apid_form"):
                 # Select gene list

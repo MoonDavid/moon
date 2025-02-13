@@ -429,20 +429,19 @@ def main():
         ],
         "Year published": [2008, 2014, 2017, 2019, 2019, 2020, 2021, 2022, 2023, 2024],
         "AUC": [0.63, 0.73, 0.52, 0.59, 0.74, 0.68, 0.69, 0.77, 0.82, 0.84],
-        "MCC": [0.08, 0.15, 0.01, 0.05, 0.14, 0.10, 0.14, 0.19, 0.49, 0.43],
+        "MCC": [0.08, 0.15, 0.01, 0.05, 0.14, 0.10, 0.14, 0.19, 0.49, 0.43]
     }
 
     # Create a DataFrame
     df = pd.DataFrame(data)
 
     # Streamlit display
-    st.title("RBR Prediction Methods")
+    st.subheader("Benchmark of prediction methods of RNA binding residues (Basu et al., 2025)")
+    st.write("[Basu et al.](https://doi.org/10.1093/bib/bbaf016) made a comparison of RNA Binding Region (RBR) prediction methods based on AUC and MCC. This benchmark evaluates various computational approaches for predicting RNA-binding residues in proteins, analyzing their effectiveness across structure- and disorder-annotated dataset")
     st.dataframe(df)
 
     # Button to generate the plot
-    if st.button("Generate Interactive Plot"):
-        # Create an Altair chart
-        st.scatter_chart(
+    st.scatter_chart(
             df,
             x="AUC",
             y="MCC",

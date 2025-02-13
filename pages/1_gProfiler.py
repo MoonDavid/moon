@@ -361,7 +361,11 @@ def main():
     st.set_page_config(page_title="gProfiler Enrichment Tool", layout="wide")
 
     st.sidebar.header("gProfiler Enrichment Tool")
-
+    if "gene_lists" not in st.session_state:
+        st.warning(
+            "No pre-loaded MPs list found in session state. Please load first main page Moonlighting Proteins Analysis to add some."
+        )
+        st.stop()
     # Add a radio button in the sidebar to select between 'Profile' and 'Convert'
     service = st.sidebar.radio(
         "Select gProfiler Service",

@@ -1550,10 +1550,10 @@ def disease(data: pd.DataFrame, selected_df_name: str):
     st.markdown("#### Enrichment Overview")
     col1, col2 = st.columns(2)
     with col1:
-        st.metric("OMIM-associated proteins", f"{disease_genes_total} / {total_proteins}",
+        st.metric("OMIM-associated proteins in Swissprot", f"{disease_genes_total} / {total_proteins}",
                   f"{enrichment_percentage:.2f}%")
     with col2:
-        st.metric(f"Proteins with disease links in {selected_df_name}", f"{disease_protein_count} / {sample_size}",
+        st.metric(f"OMIM-associated proteins in {selected_df_name}", f"{disease_protein_count} / {sample_size}",
                   f"{dataset_disease_percentage:.2f}%")
 
     # --- Hypergeometric Test ---
@@ -1600,6 +1600,51 @@ def disease(data: pd.DataFrame, selected_df_name: str):
         xaxis_title='Dataset'
     )
     st.plotly_chart(fig)
+
+def enzymes(data: pd.DataFrame, selected_df_name: str):
+    # Define a function to split and clean the EC_number strings.
+    enzymes_df = data[data["EC number"].notna()].copy()
+    st.write("### Enzymes analysis")
+    enzyme_count = enzymes_df.shape[0]
+    total_count = data.shape[0]
+    st.metric(label=f"Enzymes in {selected_df_name}", value=f"{enzyme_count}/{total_count}")
+
+
+    # Apply the function to create a list of EC numbers in a new column.
+    enzymes_df["EC_exploded"] = enzymes_df["EC number"].str.split("; ")
+
+    # Explode the list so that each row corresponds to a single EC number.
+    enzymes_exploded = enzymes_df.explode("EC_exploded")
+    enzymes_exploded=enzymes_exploded['EC_exploded']
+
+
+
+    st.write("### Frequency of EC Classes")
+    ec_classes = enzymes_exploded.str.split(".").str[0]
+
+    # Count occurrences of each EC class
+    class_counts = ec_classes.value_counts()
+
+    # Display the bar chart using Streamlit
+    st.bar_chart(class_counts)
+
+    st.write("### Frequency of EC Subclasses")
+    ec_subclasses = enzymes_exploded.str.split(".").str[:2].str.join(".")
+    subclass_counts = ec_subclasses.value_counts()
+    st.bar_chart(subclass_counts)
+
+    # Button to save the gene list for enzyme proteins to the session state.
+    if st.button("Save Enzyme Gene List"):
+        enzyme_genes = enzymes_df["UniProtKB-AC"].tolist()
+        session_key = f"Enzymes_{selected_df_name}"
+        if session_key not in st.session_state['gene_lists']:
+            st.session_state['gene_lists'][session_key] = enzyme_genes
+            st.success(f"Enzyme UniProtKB-AC list saved in session state with key: {session_key}")
+        else:
+            st.warning("Gene list already exists in session state.")
+
+
+
 # =======================
 # Main Function
 # =======================
@@ -1653,24 +1698,29 @@ def main():
     st.write("Seleziona il dataset filtrato da usare per le analisi successive:")
 
     df_names=sorted(get_lists_from_session())
-
-
+    if'form_submitted' not in st.session_state:
+        st.session_state['form_submitted'] = False
+    if 'selected_df' not in st.session_state:
+        st.session_state['selected_df'] = None
 
         # Define the form
     with st.form("data_selection_form"):
-        selected_df_name = st.selectbox(
+        st.selectbox(
             "Select a DataFrame for successive analysis:",
             df_names,
+             index=df_names.index(st.session_state["selected_df"])
+             if st.session_state["selected_df"]
+             else 0,
             key='selected_df',
         )
-
         remove_unreviewed = st.checkbox("Remove unreviewed proteins")
-
-        # Submit button
         submitted = st.form_submit_button("Submit")
-
-
-    if submitted or selected_df_name in st.session_state['gene_lists']:
+        if submitted:
+            st.session_state['form_submitted'] = True
+    selected_df_name = st.session_state['selected_df']
+    if st.session_state['form_submitted']:
+        selected_df_name = st.session_state['selected_df']
+        st.write(f"Selected DataFrame: {selected_df_name}")
         selected_df_uniprots = st.session_state['gene_lists'][selected_df_name]
         data = df_from_uniprots(df, selected_df_uniprots)
 
@@ -1703,12 +1753,20 @@ def main():
 
         st.subheader("Protein physicochemical features ")
         # Automatically run analysis without a button
-        with st.expander("See analysis Gemini"):
+        with st.expander("See analysis"):
             sequence_analysis(data)
+
+        st.subheader("Protein domains")
+        with st.expander("See analysis"):
+            interpro_analysis(data, selected_df_name)
 
         st.subheader("RNA binding proteins")
         with st.expander("See analysis"):
             rna_binding_analysis(data, selected_df_name)
+
+        st.subheader("Enzymes")
+        with st.expander("See analysis"):
+            enzymes(data, selected_df_name)
 
         st.subheader("Intrinsically disordered regions and proteins")
         with st.expander("See analysis"):
