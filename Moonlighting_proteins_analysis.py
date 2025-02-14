@@ -17,6 +17,8 @@ import altair as alt
 import json
 import plotly.express as px
 import plotly.graph_objects as go
+from pyvis.network import Network
+import streamlit.components.v1 as components
 
 
 
@@ -1521,13 +1523,100 @@ def disorder_analysis(data: pd.DataFrame, selected_df_name: str):
 
         st.plotly_chart(fig, use_container_width=True)
 
+def plot_disease_classifications(df, selected_column,topn):
+    # Create DataFrame with gene IDs and exploded classificatio
+    expanded_df = df[["gene_symbol", selected_column]].copy()
+
+    # Explode and then group by geneid to get sets of terms for each gene
+    expanded_df[selected_column] = expanded_df[selected_column].str.split("|")
+    expanded_df = expanded_df.explode(selected_column)
+
+    # Group by geneid and create sets of terms
+    grouped_terms = (
+        expanded_df.groupby("gene_symbol")[selected_column]
+        .agg(set)  # Convert to set to get unique terms
+        .reset_index()
+    )
+
+    # Now explode these sets to count unique term frequencies
+    exploded_unique = grouped_terms[selected_column].explode()
+    value_counts = exploded_unique.value_counts().reset_index()
+    value_counts.columns = ["Category", "Unique Genes Count"]
+
+    # Create an interactive bar plot
+    fig = px.bar(
+        value_counts.head(topn),
+        x="Category",
+        y="Unique Genes Count",
+        title=f"Top 20 {selected_column} Distribution",
+        labels={
+            "Unique Genes Count": "Number of associated MPs",
+            "Category": selected_column,
+        },
+    )
+
+    # Customize the layout
+    fig.update_layout(
+        xaxis_tickangle=-45,
+        height=600,
+        showlegend=False,
+        title_x=0.5,
+        title_font_size=20,
+    )
+
+    return fig, value_counts
+
+
+def create_gene_disease_network(disease_df, classification_column):
+    # Create a network
+    net = Network(height="750px", width="100%", bgcolor="#ffffff", font_color="black")
+
+    # Add disease nodes
+    diseases = disease_df[classification_column].dropna().unique()
+    for disease in diseases:
+        net.add_node(disease, label=disease, color="#ff7f7f", title=disease)
+
+    # Add gene nodes and edges
+    for _, row in disease_df.dropna(
+        subset=[classification_column, "gene_symbol"]
+    ).iterrows():
+        disease = row[classification_column]
+        gene = row["gene_symbol"]
+
+        # Add gene node if it doesn't exist
+        net.add_node(gene, label=gene, color="#7f7fff", title=gene)
+
+        # Add edge between disease and gene
+        net.add_edge(disease, gene)
+
+    net.show_buttons(filter_=[ "physics"])
+    # Save the network
+    net.save_graph("gene_disease_network.html")
+    try:
+
+        with open("gene_disease_network.html", "r", encoding="utf-8") as file:
+            html_content = file.read()
+        components.html(html_content, height=1600, scrolling=True)
+
+        # Provide a download button for the HTML
+        with open("gene_disease_network.html", "rb") as file:
+            st.download_button(
+                label="Download Network Visualization",
+                data=file,
+                file_name="gene_disease_network.html",
+                mime="text/html",
+            )
+    except Exception as viz_error:
+        st.error(f"Visualization Error: {viz_error}")
+
+
 
 def disease(data: pd.DataFrame, selected_df_name: str):
     # --- Title & Introduction ---
-    st.markdown("### Disease Association Analysis")
+    st.markdown("## Disease Association Analysis")
 
     # removed the expander
-    st.markdown("#### About OMIM/MIM")
+    st.markdown("### About OMIM/MIM")
     st.write(
         """
         **OMIM (Online Mendelian Inheritance in Man)** is a comprehensive, authoritative compendium of human genes and genetic phenotypes.
@@ -1595,12 +1684,73 @@ def disease(data: pd.DataFrame, selected_df_name: str):
     # Create a bar chart using Plotly
     fig = go.Figure(data=[go.Bar(x=labels, y=values, marker_color=['#3498db', '#e74c3c'])])
     fig.update_layout(
-        title_text=f'Disease Association Proportion',
+        title_text=f'OMIM Disease Association Proportion',
         yaxis_title='Percentage',
         yaxis=dict(range=[0, max(values) + 5]),  # Add buffer to Y axis
         xaxis_title='Dataset'
     )
     st.plotly_chart(fig)
+
+    st.write('## About DIsGeNET')
+    st.write("DisGeNET is a comprehensive knowledge platform for exploring the genetic basis of human diseases. It integrates data from multiple sources, including curated datasets, genome-wide association studies (GWAS), animal models, and the scientific literature."
+             " Curated search involves accessing manually reviewed and validated data from various specialized databases: **CLINGEN**, **CLINVAR**, **PSYGENET**, **ORPHANET**, **UNIPROT**, **MGD (Human)**, and **RGD (Human**"
+             )
+    disease = pd.read_csv("data/gene_disease_associations.tsv", sep="\t")
+    associated=disease[disease["gene_symbol"].isin(data["Entrez"])]["geneid"].nunique()
+    st.metric(label="Number of associated genes in DIsGeNET", value=f"{associated}/{len(data)}")
+    disease=disease[disease["gene_symbol"].isin(data["Entrez"])]
+    st.write('### Most common diseases')
+    st.dataframe(disease['disease_name'].value_counts())
+    classification_columns = [
+        "diseaseUMLSCUI",
+        "diseaseClasses_MSH",
+        "diseaseClasses_UMLS_ST",
+        "diseaseClasses_DO",
+        "diseaseClasses_HPO",
+    ]
+
+
+    selected_classification = st.selectbox(
+        "Select Disease Classification System:", classification_columns
+    )
+
+    # Add a number input for top N categories to show
+    top_n = st.slider("Select number of top categories to display:", 5, 50, 20)
+
+    # Create two columns for layout
+    col1, col2 = st.columns([2, 1])
+
+    # Generate and display the plot
+    fig, value_counts = plot_disease_classifications(disease, selected_classification,top_n)
+
+    with col1:
+        st.plotly_chart(fig, use_container_width=True)
+
+    with col2:
+        st.write("### All Categories")
+        st.dataframe(value_counts, height=400)
+
+    # Add some summary statistics
+    st.write("### Summary Statistics")
+    total_categories = len(value_counts)
+    total_entries = value_counts["Unique Genes Count"].sum()
+
+    # Create three columns for metrics
+    metric_col1, metric_col2, metric_col3 = st.columns(3)
+
+    with metric_col1:
+        st.metric("Total Categories", total_categories)
+    with metric_col2:
+        st.metric("Total Entries", total_entries)
+    with metric_col3:
+        st.metric(
+            "Average Entries per Category", f"{total_entries / total_categories:.2f}"
+        )
+    if st.button("Generate Network Visualization"):
+        create_gene_disease_network(disease, selected_classification)
+
+
+
 def enzymes(data: pd.DataFrame, selected_df_name: str):
     import plotly.graph_objects as go
     import plotly.express as px
