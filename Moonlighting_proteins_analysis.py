@@ -19,6 +19,13 @@ import plotly.express as px
 import plotly.graph_objects as go
 from pyvis.network import Network
 import streamlit.components.v1 as components
+import streamlit as st
+import scipy.stats as stats
+from scipy.stats import binomtest, chisquare, fisher_exact
+from statsmodels.stats.proportion import proportions_ztest
+
+
+
 
 
 
@@ -1646,33 +1653,82 @@ def disease(data: pd.DataFrame, selected_df_name: str):
         st.metric(f"OMIM-associated proteins in {selected_df_name}", f"{disease_protein_count} / {sample_size}",
                   f"{dataset_disease_percentage:.2f}%")
 
-    # --- Hypergeometric Test ---
-    st.markdown("#### Hypergeometric Test")
-    M = total_proteins  # Population size
-    N = sample_size  # Sample size (proteins in the selected dataset)
-    K = disease_genes_total  # Disease-associated proteins in UniProtKB
-    k = disease_protein_count  # Disease-associated proteins in selected dataset
-    p_value_hypergeo = hypergeom.sf(k - 1, M, K, N)
-    st.write(f"**P-value:** {p_value_hypergeo:.4e}")
-    if p_value_hypergeo < 0.05:
-        st.success(
-            "The observed proportion of disease-associated proteins in the dataset is significantly enriched compared to UniProtKB (p < 0.05).")
-    else:
-        st.warning(
-            "The observed proportion of disease-associated proteins in the dataset is not significantly different from UniProtKB (p ≥ 0.05).")
-
-    # --- Binomial Test ---
-    st.markdown("#### Binomial Test")
+    # Calculate baseline probability
     baseline_probability = disease_genes_total / total_proteins
-    binom_result = binomtest(disease_protein_count, n=sample_size, p=baseline_probability, alternative='two-sided')
-    p_value_binomial = binom_result.pvalue
-    st.write(f"**P-value:** {p_value_binomial:.4e}")
-    if p_value_binomial < 0.05:
-        st.success(
-            "The observed proportion of disease-associated proteins in the dataset significantly deviates from the expected proportion (p < 0.05).")
-    else:
-        st.warning(
-            "The observed proportion of disease-associated proteins in the dataset is not significantly different from the expected proportion (p ≥ 0.05).")
+
+    # Choose the test to perform
+    selected_test = st.selectbox(
+        "Perform a statistical test",
+        [
+            "Chi-square Goodness-of-Fit Test",
+            "Binomial Test",
+            "Fisher's Exact Test",
+        ],
+    )
+
+    if selected_test == "Chi-square Goodness-of-Fit Test":
+        st.markdown("#### Chi-square Goodness-of-Fit Test")
+        # Observed counts: [disease-associated, not disease-associated] in the sample
+        observed = [disease_protein_count, sample_size - disease_protein_count]
+        # Expected counts based on the baseline probability
+        expected = [
+            sample_size * baseline_probability,
+            sample_size * (1 - baseline_probability),
+        ]
+        chi2_stat, p_value_chi2 = chisquare(f_obs=observed, f_exp=expected)
+        st.write(f"**Chi-square statistic:** {chi2_stat:.4f}")
+        st.write(f"**P-value:** {p_value_chi2:.4e}")
+        if p_value_chi2 < 0.05:
+            st.success(
+                "The observed proportion significantly deviates from the expected proportion (p < 0.05)."
+            )
+        else:
+            st.warning(
+                "The observed proportion is not significantly different from the expected proportion (p ≥ 0.05)."
+            )
+
+    elif selected_test == "Binomial Test":
+        st.markdown("#### Binomial Test")
+        binom_result = binomtest(
+            disease_protein_count,
+            n=sample_size,
+            p=baseline_probability,
+            alternative="two-sided",
+        )
+        p_value_binomial = binom_result.pvalue
+        st.write(f"**P-value:** {p_value_binomial:.4e}")
+        if p_value_binomial < 0.05:
+            st.success(
+                "The observed proportion significantly deviates from the expected proportion (p < 0.05)."
+            )
+        else:
+            st.warning(
+                "The observed proportion is not significantly different from the expected proportion (p ≥ 0.05)."
+            )
+
+
+    elif selected_test == "Fisher's Exact Test":
+        st.markdown("#### Fisher's Exact Test")
+        # Construct the 2x2 contingency table
+        # Rows: [Sample, Background - Sample]
+        # Columns: [Disease-associated, Not disease-associated]
+        a = disease_protein_count
+        b = sample_size - disease_protein_count
+        c = disease_genes_total - disease_protein_count
+        d = (total_proteins - sample_size) - (
+            disease_genes_total - disease_protein_count
+        )
+        table = [[a, b], [c, d]]
+        st.write("Contingency Table:")
+        st.write(f"[[{a}, {b}],")
+        st.write(f" [{c}, {d}]]")
+        oddsratio, p_value_fisher = fisher_exact(table, alternative="two-sided")
+        st.write(f"**Odds Ratio:** {oddsratio:.4f}")
+        st.write(f"**P-value:** {p_value_fisher:.4e}")
+        if p_value_fisher < 0.05:
+            st.success("The association is statistically significant (p < 0.05).")
+        else:
+            st.warning("The association is not statistically significant (p ≥ 0.05).")
 
     # --- Plot ---
     st.markdown("#### Visualization")
@@ -1803,7 +1859,8 @@ def enzymes(data: pd.DataFrame, selected_df_name: str):
 
     # EC Classes data preparation
     ec_classes = enzymes_exploded.str.split(".").str[0]
-    class_counts = ec_classes.value_counts()
+    class_counts = ec_classes.value_counts().sort_index()
+
 
 
     # Create legend labels
@@ -1812,6 +1869,8 @@ def enzymes(data: pd.DataFrame, selected_df_name: str):
     ]
 
     st.write("### EC Classes Analysis", unsafe_allow_html=True)
+    st.write(list(class_counts))
+    print(list(class_counts))
     # Pie Chart using Plotly
     fig_pie = go.Figure(
         data=[
@@ -1927,11 +1986,13 @@ def main():
     if 'gene_lists' not in st.session_state:
         st.session_state['gene_lists'] = dict()
     st.write(
-        "Questa app interattiva permette un'analisi dati esplorativa delle proteine moonlighting umane. "
-        "Ogni tabella offre funzionalità di esportazione in formato CSV, ricerca di valori specifici e ordinamento delle colonne. "
-        "Qui di seguito è mostrato un compendio di proteine moonlighting umane ottenute dai 3 principali database: "
-        "[MoonProt](http://www.moonlightingproteins.org/), [MoonDB](http://moondb.hb.univ-amu.fr/) e [MultiTaskProtDB](http://wallace.uab.es/multitaskII). "
-        "Il dataset di MultiTaskProtDB è stato ottenuto tramite mail da uno degli autori perchè il server è down da mesi per attacco informatico.")
+        "This interactive app allows for an exploratory data analysis of human moonlighting proteins. "
+        "Each table provides functionalities for CSV export, specific value search, and column sorting. "
+        "Below is a compendium of human moonlighting proteins obtained from the three main databases: "
+        "[MoonProt](http://www.moonlightingproteins.org/), [MoonDB](http://moondb.hb.univ-amu.fr/), and [MultiTaskProtDB](http://wallace.uab.es/multitaskII). "
+        "The MultiTaskProtDB dataset was obtained via email from one of the authors because the server has been down for months due to a cyber attack."
+    )
+
     # Display dataset overview
     st.subheader("Dataset Overview of Human Moonlighting Proteins (MPs)")
     st.dataframe(df)
@@ -1939,25 +2000,25 @@ def main():
     # Venn Diagram
     st.subheader("Venn Diagram of Proteins Distribution Across Databases")
     st.write(
-        "Visualizza la distribuzione delle proteine moonlighting umane nei 3 principali database: MoonDB, MoonProt e MultiTaskProtDB")
-    plot_venn_diagram(df)
+        "View the distribution of human moonlighting proteins across the three main databases: MoonDB, MoonProt, and MultiTaskProtDB."
+    )
 
     # Filtering Section
     st.subheader("Filtering by membership in different databases")
     st.write("""
-        Crea un dataset filtrato per le analisi successive selezionando i database di interesse e se vuoi l'intersezione o l'unione dei risultati.
-        Di default ce ne sono gia' 3:
+        Create a filtered dataset for further analysis by selecting the databases of interest and choosing whether you want the intersection or union of the results. 
+        By default, there are already three predefined datasets:
 
-        * Intersezione di MoonProt e MultiTaskProtDB (più restrittivo) \t\t\t :green[humanMPs(MoonProt AND MultiTaskProtDB)]
-        * Unione di MoonProt e MultiTaskProtDB \t\t\t :green[humanMPs(MoonProt OR MultiTaskProtDB)]
-        * Unione di tutti e 3 i database (meno restrittivo) \t\t\t :green[humanMPs_all]
+        * **High-Consensus Dataset** (Intersection of MoonProt and MultiTaskProtDB - more restrictive) \t\t\t :green[humanMPs_highConsensus]
+        * **Combined Literature Dataset** (Union of MoonProt and MultiTaskProtDB) \t\t\t :green[humanMPs_combinedLit]
+        * **Comprehensive Dataset** (Union of all three databases - less restrictive) \t\t\t :green[humanMPs_comprehensive]
     """)
 
     filtered_data = filter_proteins(df)
 
     # Add genes to session state
     st.subheader("Select dataframe")
-    st.write("Seleziona il dataset filtrato da usare per le analisi successive:")
+    st.write("Select the dataset to display analysis: ")
 
     df_names=sorted(get_lists_from_session())
     if'form_submitted' not in st.session_state:
