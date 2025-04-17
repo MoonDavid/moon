@@ -769,7 +769,7 @@ def main():
             style = st.selectbox("Select Style", ["stick", "sphere", "cartoon"])
 
             # Color scheme options
-            color_options = ["RNA Propensity", "spectrum"]
+            color_options = ["RNA binding HybridRNAbind", "RNA binding iDRNA-TF", "RNA bindtreamling PST-PRNA", "spectrum"]
             color_scheme = st.selectbox("Color Scheme", color_options)
 
             # Background color
@@ -791,37 +791,39 @@ def main():
             viewer = py3Dmol.view(data=pdb_data,width=800, height=600)
 
             # Handle RNA Propensity coloring
-            if color_scheme == "RNA Propensity":
+            if color_scheme.startswith("RNA binding"):
                 # Map RNA propensity scores to the structure
-                if (
-                    selected_protein in hybridRNAbind
-                    and "RNA_propensity" in hybridRNAbind[selected_protein]
-                ):
+                if (color_scheme == "RNA binding HybridRNAbind"):
+
                     rna_scores = hybridRNAbind[selected_protein]["RNA_propensity"]
-
+                elif (color_scheme == "RNA binding iDRNA-TF"):
+                    rna_scores = iDRNA_TF[selected_protein]["RNA_propensity"]
+                elif (color_scheme == "RNA binding PST-PRNA"):
+                    # Load PST-PRNA data
+                    pstprna_file = (
+                        f"data/pstprna/AF-{selected_protein}-F1-model_v4.pdb_result.txt"
+                    )
+                    pst_data = parse_pstprna(pstprna_file)
+                    rna_scores = pst_data["RNA_propensity"]
                     # Create color mapping function
-                    def get_color_for_score(score):
-                        # Convert score to RGB hex string (white to red)
-                        # Score 0 -> #FFFFFF (white)
-                        # Score 1 -> #FF0000 (red)
-                        r = 255
-                        g = b = max(0, 255 - int(score * 255))
-                        return f"0x{r:02x}{g:02x}{b:02x}"
+                def get_color_for_score(score):
+                    # Convert score to RGB hex string (white to red)
+                    # Score 0 -> #FFFFFF (white)
+                    # Score 1 -> #FF0000 (red)
+                    r = 255
+                    g = b = max(0, 255 - int(score * 255))
+                    return f"0x{r:02x}{g:02x}{b:02x}"
 
-                    # Apply colors to each residue
-                    for i, score in enumerate(rna_scores):
-                        residue_position = i + 1  # 1-based indexing for PDB
-                        color = get_color_for_score(score)
+                # Apply colors to each residue
+                for i, score in enumerate(rna_scores):
+                    residue_position = i + 1  # 1-based indexing for PDB
+                    color = get_color_for_score(score)
 
-                        # Apply color to this residue
-                        viewer.setStyle(
-                            {"resi": str(residue_position)},
-                            {style: {"color": color}},
-                        )
-                else:
-                    st.warning("RNA propensity data not available for this protein")
-                    # Fall back to spectrum coloring
-                    viewer.setStyle({}, {style: {"color": "spectrum"}})
+                    # Apply color to this residue
+                    viewer.setStyle(
+                        {"resi": str(residue_position)},
+                        {style: {"color": color}},
+                    )
             else:
                 # Handle other color schemes
                 if color_scheme == "spectrum":
@@ -883,7 +885,7 @@ def main():
             return f"0x{red:02x}{gb_val:02x}{gb_val:02x}"
 
         # Create 2x2 grid viewer
-        grid_viewer = py3Dmol.view(width=800, height=600, viewergrid=(2, 2))
+        grid_viewer = py3Dmol.view(width=1200, height=600, viewergrid=(2, 2))
 
         # Model 1 - HybridRNAbind
         grid_viewer.addModel(pdb_data, "pdb", viewer=(0, 0))
@@ -967,7 +969,7 @@ def main():
         add_viewer_label(grid_viewer, "iDRNA-TF", (0, 1))
         add_viewer_label(grid_viewer, "PST-PRNA", (1, 0))
         add_viewer_label(grid_viewer, "Partial Charge", (1, 1))
-        showmol(grid_viewer, width=800, height=600)
+        showmol(grid_viewer, width=1200, height=600)
         # After displaying the grid viewer
         # After displaying the grid viewer
         st.markdown(
