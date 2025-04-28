@@ -41,7 +41,7 @@ def load_data(file_path: str) -> pd.DataFrame:
     df = df.replace("", np.nan)
     return df
 
-@st.cache_data
+
 def enrichment_analysis(query_uniprots, dict, correction='fdr_bh'):
     """
     Perform over-representation analysis on a set of UniProt IDs ('query_uniprots')
