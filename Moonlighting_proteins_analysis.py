@@ -788,6 +788,51 @@ def interpro_analysis(data: pd.DataFrame, selected_df_name):
             st.success(f"Associated UniProtKB-AC IDs saved to session state with key: {session_key}")
     st.write("### Enrichment of InterPro domains:")
     #read dict from domain_dict.json
+    with st.expander("Statistical Methods Explanation"):
+        st.markdown("#### Hypergeometric Test")
+        st.markdown(
+            "The hypergeometric test calculates the probability of observing at least $k$ proteins with a particular domain in a sample of size $n$, given that there are $K$ proteins with that domain in a population of size $N$."
+        )
+
+        st.latex(
+            r"""P(X \geq k) = \sum_{i=k}^{\min(n,K)} \frac{{K \choose i}{{N-K} \choose {n-i}}}{{N \choose n}}"""
+        )
+
+        st.markdown("Where:")
+        st.markdown("- $N$ = Total number of proteins in the background set")
+        st.markdown("- $K$ = Number of proteins in the background set with the domain")
+        st.markdown("- $n$ = Number of proteins in the query set")
+        st.markdown("- $k$ = Number of proteins in the query set with the domain")
+        st.markdown(
+            "- $P(X \\geq k)$ = Probability of observing at least $k$ proteins with the domain by chance"
+        )
+
+        st.markdown("#### Benjamini-Hochberg Correction")
+        st.markdown(
+            "The Benjamini-Hochberg procedure controls the false discovery rate (FDR) when performing multiple hypothesis tests:"
+        )
+
+        st.markdown(
+            "1. Sort all p-values in ascending order: $p_1 \\leq p_2 \\leq ... \\leq p_m$"
+        )
+        st.markdown(
+            "2. For a given FDR level $\\alpha$ (typically 0.05), find the largest $k$ such that:"
+        )
+
+        st.latex(r"""p_k \leq \frac{k}{m} \cdot \alpha""")
+
+        st.markdown(
+            "3. Reject the null hypothesis (i.e., consider the enrichment significant) for all tests with p-values $p_1, p_2, ..., p_k$"
+        )
+        st.markdown("4. The adjusted p-value for each test is calculated as:")
+
+        st.latex(
+            r"""p_{adj,i} = \min\left(\min_{j \geq i}\left(\frac{m \cdot p_j}{j}\right), 1\right)"""
+        )
+
+        st.markdown(
+            "This method controls the expected proportion of false positives among all rejected hypotheses."
+        )
     domain_dict = json.load(open("data/domain_dict.json", "r"))
     #delete all keys that starts with DP
     domain_dict = {k: v for k, v in domain_dict.items() if not k.startswith("DP")}
