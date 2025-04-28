@@ -2247,6 +2247,7 @@ def main():
     st.write(
         "View the distribution of human moonlighting proteins across the three main databases: MoonDB, MoonProt, and MultiTaskProtDB."
     )
+    plot_venn_diagram(df)
 
     # Filtering Section
     st.subheader("Filtering by membership in different databases")
