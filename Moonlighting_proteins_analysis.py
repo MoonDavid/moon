@@ -737,6 +737,7 @@ def interpro_analysis(data: pd.DataFrame, selected_df_name):
     # Function to safely evaluate strings to Python literals
 
     abbr= {
+        "IP": "InterPro",
         "TI": "ncbifam",
         "PT": "panther",
         "PS": "prosite",
@@ -750,7 +751,7 @@ def interpro_analysis(data: pd.DataFrame, selected_df_name):
         "SM": "smart",
         "SF": "sfld",
         "PF": "pfam",
-        "IP": "InterPro"
+
     }
     # Convert the 'interpro_data' column from string to actual tuples
 
@@ -801,9 +802,16 @@ def interpro_analysis(data: pd.DataFrame, selected_df_name):
         st.markdown(
             "This method controls the expected proportion of false positives among all rejected hypotheses."
         )
-    domain_dict = json.load(open("data/domain_dict.json", "r"))
+    #domain_dict = json.load(open("data/domain_dict.json", "r"))
+    db_options = abbr.keys()
+    selected_db = st.selectbox(
+        "Select InterPro member databases to display:",
+        options=db_options,
+        index=0
+    )
     #delete all keys that starts with DP
-    domain_dict = {k: v for k, v in domain_dict.items() if not k.startswith("DP")}
+    domain_dict = json.load(open("data/domain_dict.json", "r"))
+    domain_dict = {k: v for k, v in domain_dict.items() if k.startswith(selected_db)}
     results_df=enrichment_analysis(dict=domain_dict, query_uniprots=df_to_uniprots(data), correction='fdr_bh')
     st.subheader("Enrichment Results")
 
@@ -815,18 +823,11 @@ def interpro_analysis(data: pd.DataFrame, selected_df_name):
         lambda x: x[:2] if x[1].isalpha() else "CATH"
     )
 
-    # Multiselect for database filtering
-    db_options = sorted(results_df['database'].unique())
-    selected_dbs = st.multiselect(
-        "Select InterPro member databases to display:",
-        options=db_options,
-        default=['IP']
-    )
-    filtered_df = results_df[results_df['database'].isin(selected_dbs)]
+
 
     st.subheader("Enrichment Results")
     st.dataframe(
-        filtered_df,
+        results_df,
         column_config={
             "weblink": st.column_config.LinkColumn(
                 "weblink",
@@ -2269,9 +2270,9 @@ def main():
         "The MultiTaskProtDB dataset was obtained via email from one of the authors because the server has been down for months due to a cyber attack."
     )
 
-    # Display dataset overview
-    st.subheader("Dataset Overview of Human Moonlighting Proteins (MPs)")
-    st.dataframe(df)
+
+    with st.expander("View Dataset Overview of Human Moonlighting Proteins (MPs)"):
+        st.dataframe(df)
 
     # Venn Diagram
     st.subheader("Venn Diagram of Proteins Distribution Across Databases")
