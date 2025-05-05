@@ -739,7 +739,7 @@ def interpro_analysis(data: pd.DataFrame, selected_df_name):
     abbr= {
         "TI": "ncbifam",
         "PT": "panther",
-        "PS": "profile",
+        "PS": "prosite",
         "NF": "ncbifam",
         "PR": "prints",
         "PI": "pirsf",
@@ -753,39 +753,7 @@ def interpro_analysis(data: pd.DataFrame, selected_df_name):
         "IP": "InterPro"
     }
     # Convert the 'interpro_data' column from string to actual tuples
-    data.loc[:, 'interpro_data'] = data['interpro_data'].apply(safe_literal_eval)
 
-    # Explode the 'interpro_data' column
-    df_exploded = data.explode('interpro_data')
-    # Count the occurrences of each value in the 'interpro_data' column
-    count = df_exploded['interpro_data'].value_counts()
-    count=count.reset_index(name='count')
-    count['weblink']=count['interpro_data'].apply(lambda x: f"https://www.ebi.ac.uk/interpro/entry/{abbr[x[0][:2]]}/{x[0]}" if isinstance(x,tuple) else "")
-    #st.write(f"Selected values: {selected_values}")
-    st.write("Most common InterPro domains:")
-    event = st.dataframe(
-        count,
-        column_config={
-            "weblink": st.column_config.LinkColumn(
-                "weblink",
-                help="Link to InterPro entry"
-            )
-        },
-        use_container_width=True,
-        hide_index=True,
-        on_select="rerun",
-        selection_mode="multi-row",
-    )
-    if event.selection and st.button("Save selection"):
-        selected_rows = event.selection.rows  # Get selected row indices
-        selected_values = count.iloc[selected_rows]['interpro_data'].values.tolist()  # Filter dataframe
-        uniprot_ids = df_exploded[df_exploded['interpro_data'].isin(selected_values)]['UniProtKB-AC'].values.tolist()
-        session_key = f"{selected_df_name}-{selected_values}"
-        st.write(f"Selected values: {selected_values}")
-        st.write(f"Associated UniProtKB-AC IDs: {uniprot_ids}")
-        if session_key not in st.session_state['gene_lists']:
-            st.session_state['gene_lists'][session_key] = uniprot_ids
-            st.success(f"Associated UniProtKB-AC IDs saved to session state with key: {session_key}")
     st.write("### Enrichment of InterPro domains:")
     #read dict from domain_dict.json
     with st.expander("Statistical Methods Explanation"):
@@ -843,12 +811,30 @@ def interpro_analysis(data: pd.DataFrame, selected_df_name):
     #results_df["-log10(pval_corrected)"] = -results_df["pval_corrected"].apply(lambda x: 1e-300 if x <= 0 else x).apply(np.log10)
     results_df['weblink'] = results_df['term'].apply(
         lambda x: f"https://www.ebi.ac.uk/interpro/entry/{abbr[x[:2]]}/{x}" if x[1].isalpha() else f"https://www.ebi.ac.uk/interpro/entry/cathgene3d/G3DSA:{x}")
-    st.dataframe(results_df,column_config={
+    results_df['database'] = results_df['term'].apply(
+        lambda x: x[:2] if x[1].isalpha() else "CATH"
+    )
+
+    # Multiselect for database filtering
+    db_options = sorted(results_df['database'].unique())
+    selected_dbs = st.multiselect(
+        "Select InterPro member databases to display:",
+        options=db_options,
+        default=['IP']
+    )
+    filtered_df = results_df[results_df['database'].isin(selected_dbs)]
+
+    st.subheader("Enrichment Results")
+    st.dataframe(
+        filtered_df,
+        column_config={
             "weblink": st.column_config.LinkColumn(
                 "weblink",
                 help="Link to InterPro entry"
-            )},hide_index=True
-        )
+            )
+        },
+        hide_index=True
+    )
 
 @st.cache_data
 def rna_binding_analysis(data: pd.DataFrame, selected_df_name):
@@ -2347,7 +2333,8 @@ def main():
             st.info("Including unreviewed proteins.")
 
         # Display the DataFrame
-        st.dataframe(data)
+        with st.expander("View Selected Data"):
+            st.dataframe(data)
 
         # Display summary statistics
         total_proteins = data.shape[0]
