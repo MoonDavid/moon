@@ -81,6 +81,8 @@ def enrichment_analysis(query_uniprots, dict, correction='fdr_bh'):
     for term, uniprot_list in dict.items():
         K = len(uniprot_list)  # number of background proteins with this domain
         k = len(query_set.intersection(uniprot_list))  # overlap with query
+        if k==0:
+            continue  # Skip if no overlap
 
         # If there's no overlap, p-value is 1 (not enriched),
         # but we still record it for completeness.
@@ -106,7 +108,8 @@ def enrichment_analysis(query_uniprots, dict, correction='fdr_bh'):
         'n': n,
         'N': N,
         'pval': pvals,
-        'pval_corrected': pvals_corrected
+        'pval_corrected': pvals_corrected,
+        'reject': reject
     })
 
     # Sort by corrected p-value ascending
