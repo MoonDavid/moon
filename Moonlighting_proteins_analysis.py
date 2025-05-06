@@ -728,7 +728,12 @@ def safe_literal_eval(val):
         return ast.literal_eval(val)
     except (ValueError, SyntaxError):
         return val
-
+def get_key_by_value(d, value):
+    """Return the first key in dict d that has the given value."""
+    for k, v in d.items():
+        if v == value:
+            return k
+    return None
 
 def interpro_analysis(data: pd.DataFrame, selected_df_name):
     """Analyze InterPro data."""
@@ -757,7 +762,7 @@ def interpro_analysis(data: pd.DataFrame, selected_df_name):
     }
     # Convert the 'interpro_data' column from string to actual tuples
 
-    st.write("### Enrichment of InterPro domains:")
+    st.write("### Enrichment of protein domains:")
     #read dict from domain_dict.json
     with st.expander("Statistical Methods Explanation"):
         st.markdown("#### Hypergeometric Test")
@@ -805,17 +810,17 @@ def interpro_analysis(data: pd.DataFrame, selected_df_name):
             "This method controls the expected proportion of false positives among all rejected hypotheses."
         )
     #domain_dict = json.load(open("data/domain_dict.json", "r"))
-    db_options = abbr.keys()
+    db_options = abbr.values()
     selected_db = st.selectbox(
-        "Select InterPro member databases to display:",
+        "Select InterPro member database to display the enrichment:",
         options=db_options,
         index=0
     )
     #delete all keys that starts with DP
     domain_dict = json.load(open("data/domain_dict.json", "r"))
-    domain_dict = {k: v for k, v in domain_dict.items() if k.startswith(selected_db)}
+    domain_dict = {k: v for k, v in domain_dict.items() if k.startswith(get_key_by_value(abbr, selected_db))}
     results_df=enrichment_analysis(dict=domain_dict, query_uniprots=df_to_uniprots(data), correction='fdr_bh')
-    st.subheader("Enrichment Results")
+    st.subheader(f"Enrichment Results for {selected_db} domains")
 
     # Add a column for negative log10 p-value (for plotting)
     #results_df["-log10(pval_corrected)"] = -results_df["pval_corrected"].apply(lambda x: 1e-300 if x <= 0 else x).apply(np.log10)
@@ -827,7 +832,6 @@ def interpro_analysis(data: pd.DataFrame, selected_df_name):
 
 
 
-    st.subheader("Enrichment Results")
     st.dataframe(
         results_df,
         column_config={
