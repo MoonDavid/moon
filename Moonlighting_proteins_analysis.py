@@ -42,7 +42,7 @@ def load_data(file_path: str) -> pd.DataFrame:
     return df
 
 
-def enrichment_analysis(query_uniprots, dict, correction='fdr_bh'):
+def enrichment_analysis(query_uniprots, dict, correction='fdr_bh',N=None):
     """
     Perform over-representation analysis on a set of UniProt IDs ('query_uniprots')
     against a background defined by 'domain_dict' (domain -> list of UniProt IDs).
@@ -69,8 +69,11 @@ def enrichment_analysis(query_uniprots, dict, correction='fdr_bh'):
     all_uniprots = set()
     for d, uniprot_list in dict.items():
         all_uniprots.update(uniprot_list)
+    if N is None:
+        N = len(all_uniprots)
+    else:
+        N = N
 
-    N = len(all_uniprots)  # total background
     n = len(query_set)  # size of the query
 
     terms = []
@@ -1915,7 +1918,7 @@ def elm_analysis(data: pd.DataFrame, selected_df_name: str):
         all_human_elm_dict[elm_type] = elm_df[elm_df['ELMType'] == elm_type]['Primary_Acc'].unique().tolist()
 
     # Perform enrichment analysis
-    results_df = enrichment_analysis(dict=all_human_elm_dict, query_uniprots=uniprot_ids, correction='fdr_bh')
+    results_df = enrichment_analysis(dict=all_human_elm_dict, query_uniprots=uniprot_ids, correction='fdr_bh',N=20000)
 
     # Display results
     st.dataframe(results_df)
@@ -1929,7 +1932,7 @@ def elm_analysis(data: pd.DataFrame, selected_df_name: str):
         all_human_elm_id_dict[elm_id] = elm_df[elm_df['ELMIdentifier'] == elm_id]['Primary_Acc'].unique().tolist()
 
     # Perform enrichment analysis
-    results_id_df = enrichment_analysis(dict=all_human_elm_id_dict, query_uniprots=uniprot_ids, correction='fdr_bh')
+    results_id_df = enrichment_analysis(dict=all_human_elm_id_dict, query_uniprots=uniprot_ids, correction='fdr_bh',N=20000)
 
     # Display results (top 20 by p-value)
     st.dataframe(results_id_df.head(20))
