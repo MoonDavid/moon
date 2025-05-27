@@ -2250,8 +2250,226 @@ def rna_expression(data: pd.DataFrame, selected_df_name: str):
     st.markdown(f"Data Source: [{data_source_name}]({data_source_url}). nTPM: Normalized Transcripts Per Million.")
 
 
+# It's assumed that upsetplot is installed in the environment (e.g., via pip install upsetplot)
 
 
+def cancer_driver(data: pd.DataFrame, selected_df_name: str):
+    """
+    Analyzes cancer driver-related data columns and visualizes the results.
+
+    Parameters:
+    - data (pd.DataFrame): Input DataFrame containing cancer-related columns
+    - selected_df_name (str): Name of the selected dataset for display
+    """
+    st.markdown("## Cancer Driver Analysis")
+    st.markdown(
+        """
+        Analysis of cancer driver annotations from multiple sources:
+        - **Cancer Gene Census**: Catalogue of genes causally implicated in cancer
+        - **Intogen**: Cancer driver genes identified through computational analysis
+        - **OncoVar**: Cancer variants from ICGC and TCGA datasets
+        """
+    )
+
+    # Import necessary for upsetplot
+    import upsetplot
+    from upsetplot import from_memberships
+
+    cancer_sources = {
+        "Cancer Gene Census": "CancerGeneCensus",
+        "Intogen": "Intogen",
+        "OncoVar ICGC": "OncoVar_ICGC",
+        "OncoVar TCGA": "OncoVar_TCGA",
+    }
+
+    # Create a mutable copy for modifications if necessary, or ensure modifications are safe
+    data_processed = data.copy()
+
+    # Check if cancer source columns exist, otherwise, fill with False
+    for col_name in cancer_sources.values():
+        if col_name not in data_processed.columns:
+            st.warning(
+                f"Column '{col_name}' not found in the dataframe. It will be treated as all False for this analysis."
+            )
+            data_processed[col_name] = False
+        else:
+            # Ensure boolean type, fill NaNs with False
+            data_processed[col_name] = (
+                data_processed[col_name].fillna(False).astype(bool)
+            )
+
+    # Create metrics in columns
+    cols = st.columns(len(cancer_sources))
+    for i, (source_name, col_name) in enumerate(cancer_sources.items()):
+        count = data_processed[col_name].sum()
+        total = len(data_processed)
+        percentage = (count / total) * 100 if total > 0 else 0
+        cols[i].metric(
+            label=source_name, value=f"{count}/{total}", delta=f"{percentage:.1f}%"
+        )
+
+    # Create upset plot for cancer drivers
+    st.subheader("Overlap between Cancer Driver Sources")
+
+    memberships = []
+    for _, row in data_processed.iterrows():
+        sources_present = []
+        for source_name, col_name in cancer_sources.items():
+            if row[col_name]:
+                sources_present.append(source_name)
+        if sources_present:  # Only add if protein is in at least one source
+            memberships.append(
+                tuple(sorted(sources_present))
+            )  # Sort for consistent tuple representation
+
+    if memberships:
+        try:
+            upset_data = from_memberships(memberships)
+            if not upset_data.empty:
+                fig_upset = plt.figure(figsize=(10, 6))
+                upsetplot.plot(
+                    upset_data, fig=fig_upset, subset_size="count"
+                )  # Explicitly set subset_size
+                st.pyplot(fig_upset)
+                plt.clf()
+            else:
+                st.info(
+                    "No data to display in Upset plot (empty after processing memberships)."
+                )
+        except Exception as e:
+            st.error(f"Could not generate Upset plot: {e}")
+            st.info(
+                "Please ensure the 'upsetplot' library is installed and data is in the correct format. Explicitly setting subset_size='count' may help."
+            )
+    else:
+        st.info(
+            "No proteins found in any cancer driver sources to create an Upset plot."
+        )
+
+    with st.expander("About the Cancer Gene Census (CGC)"):
+        st.markdown(
+            """
+            The Cancer Gene Census (CGC) is an ongoing effort to catalogue those genes which contain mutations that have been causally implicated in cancer and explain how dysfunction of these genes drives cancer. The content, the structure, and the curation process of the Cancer Gene Census was described and published in Nature Reviews Cancer.
+
+            The census is not static, instead it is updated when new evidence comes to light. In particular we are grateful to Felix Mitelman and his colleagues in providing information on more genes involved in uncommon translocations in leukaemias and lymphomas. Currently, more than 1% of all human genes are implicated via mutation in cancer. Of these, approximately 90% contain somatic mutations in cancer, 20% bear germline mutations that predispose an individual to cancer and 10% show both somatic and germline mutations.
+
+            **Census tiers**
+            Genes in the Cancer Gene Census are divided into two groups, or tiers.
+            """
+        )
+
+    # Analyze Role in Cancer distribution
+    st.subheader("Role in Cancer Distribution")
+    if "Role in Cancer" in data_processed.columns:
+        role_counts = data_processed["Role in Cancer"].value_counts()
+        if not role_counts.empty:
+            fig_role = px.pie(
+                values=role_counts.values,
+                names=role_counts.index,
+                title="Distribution of Cancer Roles",
+                hole=0.3,
+            )
+            st.plotly_chart(fig_role)
+        else:
+            st.info("No data available for 'Role in Cancer'.")
+    else:
+        st.warning("Column 'Role in Cancer' not found.")
+
+    with st.expander("Explanation of Cancer Gene Census Tiers"):
+        st.markdown(
+            """
+            **Tier 1**
+            To be classified into Tier 1, a gene must possess a documented activity relevant to cancer, along with evidence of mutations in cancer which change the activity of the gene product in a way that promotes oncogenic transformation. We also consider the existence of somatic mutation patterns across cancer samples gathered in COSMIC. For instance, tumour suppressor genes often show a broad range of inactivating mutations and dominant oncogenes usually demonstrate well defined hotspots of missense mutations. Genes involved in oncogenic fusions are included in Tier 1 when changes to their function caused by the fusion drives oncogenic transformation, or in cases when they provide regulatory elements to their partners (e.g. active promoter or dimerisation domain).
+
+            **Tier 2**
+            A new section of the Census, which consists of genes with strong indications of a role in cancer but with less extensive available evidence. These are generally more recent targets, where the body of evidence supporting their role is still emerging.
+            """
+        )
+
+    # Analyze Tier distribution
+    st.subheader("Cancer Gene Census Tier Distribution")
+    if "Tier" in data_processed.columns:
+        tier_counts = data_processed["Tier"].value_counts()
+        if not tier_counts.empty:
+            fig_tier = px.bar(
+                x=tier_counts.index.astype(
+                    str
+                ),  # Ensure index is string for categorical axis
+                y=tier_counts.values,
+                title="Distribution of Cancer Gene Census Tiers",
+                labels={"x": "Tier", "y": "Count"},
+            )
+            st.plotly_chart(fig_tier)
+        else:
+            st.info("No data available for 'Tier'.")
+    else:
+        st.warning("Column 'Tier' not found.")
+
+    # Create detailed table of cancer drivers
+    st.subheader("Cancer Driver Details")
+
+    driver_cols_present = [
+        col for col in cancer_sources.values() if col in data_processed.columns
+    ]
+
+    if not driver_cols_present:
+        st.info("No cancer driver source columns found to identify cancer drivers.")
+        return
+
+    cancer_driver_mask = data_processed[driver_cols_present].any(axis=1)
+
+    display_cols = []
+    if "UniProtKB-AC" in data_processed.columns:
+        display_cols.append("UniProtKB-AC")
+    if "Gene symbol" in data_processed.columns:
+        display_cols.append("Gene symbol")
+
+    display_cols.extend(driver_cols_present)  # Add available driver columns
+
+    if "Role in Cancer" in data_processed.columns:
+        display_cols.append("Role in Cancer")
+    if "Tier" in data_processed.columns:
+        display_cols.append("Tier")
+
+    # Ensure all display_cols actually exist in data_processed to avoid KeyErrors and ensure uniqueness
+    final_display_cols = [
+        col
+        for col in list(dict.fromkeys(display_cols))
+        if col in data_processed.columns
+    ]
+
+    if not final_display_cols:
+        st.info("No relevant columns available to display for cancer drivers.")
+        return
+
+    cancer_drivers_df = data_processed.loc[cancer_driver_mask, final_display_cols]
+
+    if not cancer_drivers_df.empty:
+        st.dataframe(cancer_drivers_df)
+
+        if st.button(
+            "Save Cancer Drivers to Session State",
+            key=f"save_cancer_drivers_{selected_df_name}",
+        ):
+            session_key = f"cancer_drivers_{selected_df_name}"
+            if "gene_lists" not in st.session_state:
+                st.session_state["gene_lists"] = {}
+
+            if "UniProtKB-AC" in cancer_drivers_df.columns:
+                st.session_state["gene_lists"][session_key] = (
+                    cancer_drivers_df["UniProtKB-AC"].dropna().unique().tolist()
+                )
+                st.success(
+                    f"Cancer drivers saved to session state with key: {session_key}"
+                )
+            else:
+                st.error(
+                    "Column 'UniProtKB-AC' not found in cancer drivers data. Cannot save."
+                )
+    else:
+        st.info(
+            "No cancer drivers found in the dataset based on the available source columns."
+        )
 # =======================
 # Main Function
 # =======================
@@ -2266,7 +2484,7 @@ def main():
     st.title("🌙 Moonlighting Proteins Analysis")
 
     # Load data
-    df = load_data('data/moonhuman.csv')  # Update with your actual file path
+    df = load_data('data/moonhuman_mim.csv')  # Update with your actual file path
     if 'df' not in st.session_state:
         st.session_state['df'] = df
     if 'gene_lists' not in st.session_state:
@@ -2359,10 +2577,10 @@ def main():
 
 
 
-        tab1, tab2, tab3, tab4, tab5, tab6, tab7, tab8, tab9, tab10 = st.tabs(
+        tab1, tab2, tab3, tab4, tab5, tab6, tab7, tab8, tab9, tab10,tab11 = st.tabs(
             [
                 "GO Terms",
-                "Physicochemical Features",
+                "Cancer Driver",
                 "Protein Domains",
                 "RNA Binding Proteins",
                 "Enzymes",
@@ -2371,6 +2589,7 @@ def main():
                 "RNA expression",
                 "Protein Expression",
                 "ELM Analysis",
+                "Physicochemical Features"
             ]
         )
 
@@ -2378,7 +2597,7 @@ def main():
             feature_analysis(data, selected_df_name)
 
         with tab2:
-            sequence_analysis(data)
+            cancer_driver(data, selected_df_name)
 
         with tab3:
             interpro_analysis(data, selected_df_name)
@@ -2403,6 +2622,11 @@ def main():
 
         with tab10:
             elm_analysis(data, selected_df_name)
+
+        with tab11:
+            sequence_analysis(data)
+
+
 
 if __name__ == "__main__":
     main()
