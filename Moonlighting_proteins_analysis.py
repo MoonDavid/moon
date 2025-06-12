@@ -2495,8 +2495,8 @@ def main():
         "Below is a compendium of human moonlighting proteins obtained from the three main databases: "
         "[MoonProt](http://www.moonlightingproteins.org/), [MoonDB](http://moondb.hb.univ-amu.fr/), and [MultiTaskProtDB](http://wallace.uab.es/multitaskII). "
         "The MultiTaskProtDB dataset was obtained via email from one of the authors because the server has been down for months due to a cyber attack."
-        "MoonProt and MultiTaskProtDB are mostly manually curated databases, while MoonDB is a computationally predicted database from PPI network selecting"
-        " moonlighting proteins based on fucntional dissimilarity of neighboorhoods in the PPI network. "
+        " MoonProt and MultiTaskProtDB are mostly manually curated databases, while MoonDB is a computationally predicted database from PPI network selecting"
+        " moonlighting proteins based on fumctional dissimilarity of neighbors in the PPI network "
     )
 
 

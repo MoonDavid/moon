@@ -8,8 +8,9 @@ import random
 import pandas as pd
 
 # Page title and description
-PAGE_TITLE = "Protein Viewer"
-PAGE_DESCRIPTION = 'This app allows you to visualize protein sequences and structures. The "Primary Sequence" tab displays the primary sequence of a protein with RNA binding propensity. The "Protein Structure" tab displays the 3D structure of a protein with various visualization options.'
+PAGE_TITLE = "Proteins feature viewer"
+PAGE_DESCRIPTION = ('This page allows you to visualize protein sequences and structures. The "Primary Sequence" tab displays the primary sequence of a protein along with its annotated features. The "Protein Structure" tab displays the 3D structure of a protein with various visualization options. '
+                    'In particular, for RNA binding proteins, the viewer shows RNA binding propensity scores from different predictors (HybridRNAbind, iDRNA-TF, PST-PRNA only in structure tab). ')
 def initialize_page() -> None:
     """Initialize the Streamlit page configuration and header."""
     st.set_page_config(page_title=PAGE_TITLE, layout="wide")
@@ -663,7 +664,7 @@ def add_viewer_label(viewer, label_text, viewer_position):
                    viewer=viewer_position)
 def main():
     # Title of the app
-    st.title("Protein Feature Viewer")
+
     import pandas as pd
 
     # Definisci i nomi delle colonne
