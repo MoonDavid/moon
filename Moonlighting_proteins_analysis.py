@@ -2495,6 +2495,8 @@ def main():
         "Below is a compendium of human moonlighting proteins obtained from the three main databases: "
         "[MoonProt](http://www.moonlightingproteins.org/), [MoonDB](http://moondb.hb.univ-amu.fr/), and [MultiTaskProtDB](http://wallace.uab.es/multitaskII). "
         "The MultiTaskProtDB dataset was obtained via email from one of the authors because the server has been down for months due to a cyber attack."
+        "MoonProt and MultiTaskProtDB are mostly manually curated databases, while MoonDB is a computationally predicted database from PPI network selecting"
+        " moonlighting proteins based on fucntional dissimilarity of neighboorhoods in the PPI network. "
     )
 
 
@@ -2507,29 +2509,21 @@ def main():
         "View the distribution of human moonlighting proteins across the three main databases: MoonDB, MoonProt, and MultiTaskProtDB."
     )
     plot_venn_diagram(df)
+    with st.expander("Filter moonlighting proteins by database membership"):
+        filter_proteins(df)
 
-    # Filtering Section
-    st.subheader("Filtering by membership in different databases")
-    st.write("""
-        Create a filtered dataset for further analysis by selecting the databases of interest and choosing whether you want the intersection or union of the results. 
-        By default, there are already three predefined datasets:
-
-        * **High-Consensus Dataset** (Intersection of MoonProt and MultiTaskProtDB - more restrictive) \t\t\t :green[humanMPs_highConsensus]
-        * **Combined Literature Dataset** (Union of MoonProt and MultiTaskProtDB) \t\t\t :green[humanMPs_combinedLit]
-        * **Comprehensive Dataset** (Union of all three databases - less restrictive) \t\t\t :green[humanMPs_comprehensive]
-    """)
-
-    filtered_data = filter_proteins(df)
 
     # Add genes to session state
     st.subheader("Select dataframe")
     st.write("Select the dataset to display analysis: ")
 
     df_names=sorted(get_lists_from_session())
+
     if'form_submitted' not in st.session_state:
         st.session_state['form_submitted'] = False
     if 'selected_df' not in st.session_state:
         st.session_state['selected_df'] = None
+
 
         # Define the form
     with st.form("data_selection_form"):
@@ -2538,7 +2532,7 @@ def main():
             df_names,
              index=df_names.index(st.session_state["selected_df"])
              if st.session_state["selected_df"]
-             else 0,
+             else 1,
             key='selected_df',
         )
         remove_unreviewed = st.checkbox("Remove unreviewed proteins")
