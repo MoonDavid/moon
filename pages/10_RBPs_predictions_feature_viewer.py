@@ -6,6 +6,7 @@ import json
 from Bio import SeqIO
 import random
 import pandas as pd
+
 # Page title and description
 PAGE_TITLE = "Protein Viewer"
 PAGE_DESCRIPTION = 'This app allows you to visualize protein sequences and structures. The "Primary Sequence" tab displays the primary sequence of a protein with RNA binding propensity. The "Protein Structure" tab displays the 3D structure of a protein with various visualization options.'
@@ -716,7 +717,7 @@ def main():
 
 
 
-    tab_seq, tab_structure = st.tabs(["Primary Sequence", "Protein Structure"])
+    tab_seq, tab_structure, tab_molstar = st.tabs(["Primary Sequence", "Protein Structure", "Molstar Viewer"])
 
     with tab_seq:
         st.subheader("Primary Sequence Feature Viewer")
@@ -997,6 +998,8 @@ def main():
             """,
             unsafe_allow_html=True,
         )
+
+
 
 if __name__ == "__main__":
     initialize_page()

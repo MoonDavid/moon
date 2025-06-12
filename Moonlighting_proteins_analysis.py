@@ -846,7 +846,7 @@ def interpro_analysis(data: pd.DataFrame, selected_df_name):
         hide_index=True
     )
 
-@st.cache_data
+
 def rna_binding_analysis(data: pd.DataFrame, selected_df_name):
     st.write(
         "[RBPWorld](http://research.gzsys.org.cn/eurbpdb2/index.html) is an updated version of EuRBPDB, specifically designed to"
