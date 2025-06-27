@@ -1635,6 +1635,21 @@ def protein_expression(data: pd.DataFrame, selected_df_name: str):
                         return cleaned_part
             return None
         ensembl_ids = data['HPA'].apply(extract_ensg).dropna().astype(str).unique()
+    elif 'ENSG_Uniprot' in data.columns:
+        st.info("Using 'ENSG_Uniprot' column for matching HPA protein data (extracting ENSG IDs).")
+        id_source_col = 'ENSG_Uniprot'
+        def extract_ensg_from_uniprot(uniprot_string):
+            if pd.isna(uniprot_string): return None
+            # Ensure input is string, split by ';', strip leading/trailing whitespace/chars
+            parts = str(uniprot_string).split(';')
+            for part in parts:
+                cleaned_part = part.strip()
+                if cleaned_part.startswith('ENSG'):
+                    # Basic check for valid ENSG format (ENSG + digits)
+                    if len(cleaned_part) > 4 and cleaned_part[4:].isdigit():
+                        return cleaned_part
+            return None
+        ensembl_ids = data['ENSG_Uniprot'].apply(extract_ensg_from_uniprot).dropna().astype(str).unique()
     else:
         st.error("Could not find a suitable column ('Ensembl' or 'HPA') in your dataset to link with HPA protein expression data.")
         return
@@ -2004,6 +2019,21 @@ def rna_expression(data: pd.DataFrame, selected_df_name: str):
     if 'Ensembl' in data.columns:
         ensembl_ids = data['Ensembl'].dropna().astype(str).unique() # Ensure string type
         id_column_used = 'Ensembl'
+    elif 'HPA' in data.columns:
+        st.info("Using 'HPA' column for matching HPA RNA expression data (extracting ENSG IDs).")
+        id_column_used = 'HPA'
+        def extract_ensg(hpa_string):
+            if pd.isna(hpa_string): return None
+            parts = str(hpa_string).split(';')
+            for part in parts:
+                cleaned_part = part[1:]
+                if cleaned_part.startswith('ENSG'):
+                    # Basic check for valid ENSG format (ENSG + digits)
+                    if len(cleaned_part) > 4 and cleaned_part[4:].isdigit():
+                        return cleaned_part
+            return None
+        ensembl_ids = data['HPA'].apply(extract_ensg).dropna().astype(str).unique()
+
 
 
     if not id_column_used:
@@ -2014,7 +2044,7 @@ def rna_expression(data: pd.DataFrame, selected_df_name: str):
     ensembl_ids = [eid for eid in ensembl_ids if isinstance(eid, str) and eid.startswith('ENSG')]
 
     if len(ensembl_ids) == 0:
-        st.warning(f"No valid Ensembl Gene IDs (starting with ENSG) found in the '{id_column_used}' column of the '{selected_df_name}' dataset after processing.")
+        st.warning(f"No valid Ensembl Gene IDs (starting with ENSG) found in the '{selected_df_name}' dataset.")
         return
 
     st.write(f"Found {len(ensembl_ids)} unique valid Ensembl Gene IDs (ENSG...) in '{selected_df_name}'.")
@@ -2035,7 +2065,7 @@ def rna_expression(data: pd.DataFrame, selected_df_name: str):
     else:
          st.success(f"Found HPA {analysis_type} RNA expression data for {genes_found} out of {len(ensembl_ids)} valid genes from '{selected_df_name}'.")
          if genes_not_found > 0:
-             st.caption(f"({genes_not_found} genes from your list were not found in the selected HPA dataset)")
+             st.caption(f"({genes_not_found} genes from your list were not found in the HPA dataset)")
 
 
     # --- Calculate Aggregated Expression ---
@@ -2496,7 +2526,7 @@ def main():
         "[MoonProt](http://www.moonlightingproteins.org/), [MoonDB](http://moondb.hb.univ-amu.fr/), and [MultiTaskProtDB](http://wallace.uab.es/multitaskII). "
         "The MultiTaskProtDB dataset was obtained via email from one of the authors because the server has been down for months due to a cyber attack."
         " MoonProt and MultiTaskProtDB are mostly manually curated databases, while MoonDB is a computationally predicted database from PPI network selecting"
-        " moonlighting proteins based on fumctional dissimilarity of neighbors in the PPI network "
+        " moonlighting proteins based on functional dissimilarity of neighbors in the PPI network "
     )
 
 
@@ -2530,9 +2560,6 @@ def main():
         st.selectbox(
             "Select a DataFrame for successive analysis:",
             df_names,
-             index=df_names.index(st.session_state["selected_df"])
-             if st.session_state["selected_df"]
-             else 1,
             key='selected_df',
         )
         remove_unreviewed = st.checkbox("Remove unreviewed proteins")
